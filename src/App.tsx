@@ -327,9 +327,9 @@ export default function App() {
             </button>
             <div className="pt-8 pb-4 px-4 bg-zinc-950 text-white rounded-t-2xl text-center">
               <img 
-                src="https://logos-download.com/wp-content/uploads/2021/01/Postnet_Logo.png" 
+                src="https://www.dotmade.co.za/wp-content/uploads/2020/10/Postnet.jpg" 
                 alt="Postnet" 
-                className="h-10 mx-auto bg-white p-1 rounded border shadow mb-2"
+                className="h-14 w-14 object-cover mx-auto rounded-xl border border-zinc-700 shadow mb-2"
                 referrerPolicy="no-referrer"
               />
               <h3 className="text-sm font-black tracking-widest font-mono text-red-600 uppercase">
