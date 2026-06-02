@@ -119,6 +119,48 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
   // Active step in Wizard
   const [step, setStep] = useState(1);
 
+  // Floating Mobile Nav and general feedback toast
+  const [resetToast, setResetToast] = useState(false);
+
+  // Restart the whole configuration back to default starting page
+  const handleStartOver = () => {
+    setStep(1);
+    setOnboardStep(1);
+    setOnboardActive(true);
+    setSelectedProductId('prod_document');
+    setPaperSize('A4');
+    setCustomWidth('210');
+    setCustomHeight('297');
+    setQuantity(1);
+    setPaperStock('80gsm');
+    setFinish('Uncoated');
+    setPrintSides('Single sided');
+    setColourMode('Black & white');
+    setTurnaround('Standard (3–5 days)');
+    setCollectionMethod('In-store collection');
+    setDeliveryAddress('');
+    setSpecialInstructions('');
+    setUploadedFiles([]);
+    setMockupZoom(100);
+    setMockupOffsetX(0);
+    setMockupOffsetY(0);
+    setMockupRotation(0);
+    setMockupFitMode('cover');
+    setUploadError(null);
+    setResetToast(true);
+    setTimeout(() => {
+      setResetToast(false);
+    }, 2500);
+  };
+
+  const handleGoBack = () => {
+    if (step > 1) {
+      setStep(step - 1);
+    } else if (onboardActive && onboardStep > 1) {
+      setOnboardStep(onboardStep - 1);
+    }
+  };
+
   // Typeform Onboarding guided tour state
   const [onboardActive, setOnboardActive] = useState(true);
   const [onboardStep, setOnboardStep] = useState(1);
@@ -2038,19 +2080,33 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
 
           {/* Navigation Action Footer inside panel */}
           <div className="flex items-center justify-between border-t pt-4 mt-6">
-            <button
-              type="button"
-              onClick={() => step > 1 && setStep(step - 1)}
-              disabled={step === 1}
-              className={`flex items-center space-x-1 py-1.5 px-3 border rounded text-xs font-semibold ${
-                step === 1 
-                  ? 'text-zinc-300 border-zinc-200' 
-                  : 'text-slate-700 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span>Back</span>
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={() => step > 1 && setStep(step - 1)}
+                disabled={step === 1}
+                className={`flex items-center space-x-1 py-1.5 px-3 border rounded text-xs font-semibold ${
+                  step === 1 
+                    ? 'text-zinc-300 border-zinc-200' 
+                    : 'text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span>Back</span>
+              </button>
+
+              {(step > 1 || !onboardActive || onboardStep > 1) && (
+                <button
+                  type="button"
+                  onClick={handleStartOver}
+                  className="text-zinc-500 hover:text-red-650 transition-colors text-xs flex items-center space-x-1 font-semibold border-l pl-3 border-zinc-200 cursor-pointer"
+                  title="Reset configurations & start again"
+                >
+                  <RotateCw className="h-3 w-3 animate-spin-hover" />
+                  <span>Start Over</span>
+                </button>
+              )}
+            </div>
 
             {step < 3 ? (
               <button
@@ -2160,6 +2216,78 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
 
         </div>
 
+      </div>
+
+      {/* Mobile Floating Navigation Bar */}
+      <div className="fixed bottom-5 left-1/2 -translate-x-1/2 w-[92%] max-w-sm bg-zinc-950/95 text-white py-2 px-3.5 rounded-full shadow-2xl border border-zinc-800/80 backdrop-blur-md z-50 flex items-center justify-between md:hidden transition-all duration-300">
+        <div className="flex items-center space-x-2">
+          {/* Mobile Back navigation button */}
+          <button
+            type="button"
+            onClick={handleGoBack}
+            disabled={(step === 1 && (!onboardActive || onboardStep === 1))}
+            className={`p-1.5 rounded-full cursor-pointer transition-all ${
+              (step === 1 && (!onboardActive || onboardStep === 1))
+                ? 'text-zinc-700 cursor-not-allowed'
+                : 'text-zinc-200 hover:text-white hover:bg-zinc-800'
+            }`}
+            title="Go Back"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+
+          {/* Context indicator */}
+          <div className="flex flex-col">
+            <span className="text-[9px] font-black uppercase tracking-wider text-red-500">
+              {onboardActive ? 'Guide Mode' : 'Specs Mode'}
+            </span>
+            <span className="text-[10px] text-zinc-350 font-bold leading-tight">
+              {onboardActive ? `Q ${onboardStep}/5` : `Step ${step}/3`}
+            </span>
+          </div>
+        </div>
+
+        {/* Action icons / shortcut controls */}
+        <div className="flex items-center space-x-2">
+          {/* Guided / Manual Configurator flow switcher */}
+          <button
+            type="button"
+            onClick={() => {
+              const nextState = !onboardActive;
+              setOnboardActive(nextState);
+              if (nextState) {
+                setOnboardStep(1);
+              }
+            }}
+            className="p-1.5 rounded-full bg-zinc-850 text-zinc-300 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+            title={onboardActive ? "Switch to Advanced Specs" : "Switch to Guided Assistant"}
+          >
+            {onboardActive ? (
+              <Sliders className="h-4 w-4 text-brand-cyan" />
+            ) : (
+              <Info className="h-4 w-4 text-emerald-450" />
+            )}
+          </button>
+
+          {/* Quick Clear Reset Configurator Button */}
+          <button
+            type="button"
+            onClick={handleStartOver}
+            className="flex items-center space-x-1.5 py-1 px-3 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-full text-[10px] font-black uppercase tracking-wider cursor-pointer shadow-sm transition-all"
+            title="Restart config from scratch"
+          >
+            <RotateCw className="h-3 w-3" />
+            <span>Reset</span>
+          </button>
+        </div>
+
+        {/* Floating Reset feedback indicator toast */}
+        {resetToast && (
+          <div className="absolute -top-11 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[10px] whitespace-nowrap font-bold px-2.5 py-1 rounded-lg shadow-lg border border-red-500 flex items-center space-x-1 animate-bounce">
+            <Check className="h-3 w-3" />
+            <span>Reset completed successfully!</span>
+          </div>
+        )}
       </div>
 
     </div>
