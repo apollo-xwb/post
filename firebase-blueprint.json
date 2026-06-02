@@ -1,0 +1,148 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Customer and staff accounts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique user ID" },
+        "email": { "type": "string", "format": "email", "description": "User email address" },
+        "role": { "type": "string", "enum": ["customer", "staff", "admin"], "description": "User access role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when account was created" },
+        "name": { "type": "string", "description": "Full name" },
+        "company": { "type": "string", "description": "Company name (optional)" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "vatNumber": { "type": "string", "description": "Optional company VAT number" },
+        "tags": { "type": "array", "description": "Internal staff tags like Corporate, VIP" }
+      },
+      "required": ["id", "email", "role", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Core print job order record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique order ID" },
+        "userId": { "type": "string", "description": "Customer UID who placed the order" },
+        "customerName": { "type": "string", "description": "Customer display name" },
+        "customerEmail": { "type": "string", "description": "Customer billing email" },
+        "status": { "type": "string", "enum": ["Received", "File Review", "In Production", "Quality Check", "Ready for Collection", "Dispatched"], "description": "Current print status" },
+        "totalPrice": { "type": "number", "description": "Total price including VAT in ZAR" },
+        "subtotal": { "type": "number", "description": "Subtotal excluding VAT" },
+        "vat": { "type": "number", "description": "15% VAT amount" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when order was submitted" },
+        "productType": { "type": "string", "description": "Type of print product" },
+        "quantity": { "type": "number", "description": "Quantity to print" },
+        "specs": { "type": "object", "description": "Detailed specs configuration Map" },
+        "turnaround": { "type": "string", "description": "Standard, Express, Same Day" },
+        "collectionMethod": { "type": "string", "description": "In-Store Collection or Courier Delivery" },
+        "deliveryAddress": { "type": "string", "description": "Delivery address if courier chosen" },
+        "specialInstructions": { "type": "string", "description": "Customer notes" },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "paid"], "description": "Payment status" },
+        "paymentMethod": { "type": "string", "description": "Stripe or PayFast" },
+        "staffNote": { "type": "string", "description": "Internal staff notes" }
+      },
+      "required": ["id", "userId", "status", "totalPrice", "createdAt", "productType", "quantity", "specs", "paymentStatus"]
+    },
+    "OrderFile": {
+      "title": "OrderFile",
+      "description": "Uploaded print source designs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique file record ID" },
+        "orderId": { "type": "string", "description": "Associated order ID" },
+        "fileName": { "type": "string", "description": "Name of the file" },
+        "fileUrl": { "type": "string", "description": "Public or secure download URL" },
+        "fileSize": { "type": "number", "description": "File sizing in bytes" },
+        "uploadedAt": { "type": "string", "format": "date-time", "description": "Uploaded timestamp" }
+      },
+      "required": ["id", "orderId", "fileName", "fileUrl", "fileSize", "uploadedAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Printable product catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Product identifier" },
+        "name": { "type": "string", "description": "Display name" },
+        "basePrice": { "type": "number", "description": "Base rate in ZAR" },
+        "active": { "type": "boolean", "description": "Is this product enabled?" },
+        "config": { "type": "object", "description": "Default configs for sizes and paper types" }
+      },
+      "required": ["id", "name", "basePrice", "active"]
+    },
+    "PricingRule": {
+      "title": "PricingRule",
+      "description": "Pricing adjustment multipliers",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique rule ID" },
+        "productId": { "type": "string", "description": "Associated product ID or 'global'" },
+        "ruleType": { "type": "string", "enum": ["paper_stock", "finish", "turnaround", "quantity_tier"], "description": "Rule variable type" },
+        "key": { "type": "string", "description": "Specific value match (e.g. 350gsm, Same Day)" },
+        "multiplier": { "type": "number", "description": "Price adjustment multiplier" }
+      },
+      "required": ["id", "productId", "ruleType", "key", "multiplier"]
+    },
+    "StatusHistory": {
+      "title": "StatusHistory",
+      "description": "Detailed log audit for job progression",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique logging ID" },
+        "orderId": { "type": "string", "description": "Associated order ID" },
+        "fromStatus": { "type": "string", "description": "Previous status" },
+        "toStatus": { "type": "string", "description": "Updated status" },
+        "changedBy": { "type": "string", "description": "UID of the actor who performed the change" },
+        "changedByName": { "type": "string", "description": "Name of the actor" },
+        "note": { "type": "string", "description": "Optional update explanation" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Audit occurrence time" }
+      },
+      "required": ["id", "orderId", "fromStatus", "toStatus", "changedBy", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Email & SMS log record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique notification ID" },
+        "userId": { "type": "string", "description": "Receiver UID" },
+        "orderId": { "type": "string", "description": "Source order ID" },
+        "channel": { "type": "string", "enum": ["email", "sms"], "description": "Transmission channel" },
+        "content": { "type": "string", "description": "The textual notification wording" },
+        "sentAt": { "type": "string", "format": "date-time", "description": "Delivery timestamp" }
+      },
+      "required": ["id", "userId", "orderId", "channel", "content", "sentAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of all user account metadata"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of incoming printing orders"
+    },
+    "/orders/{orderId}/order_files/{fileId}": {
+      "schema": "OrderFile",
+      "description": "Subcollection of files belonging to an order"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Print product catalogue collection"
+    },
+    "/pricing_rules/{ruleId}": {
+      "schema": "PricingRule",
+      "description": "Pricing multiplier rules collection"
+    },
+    "/orders/{orderId}/status_history/{historyId}": {
+      "schema": "StatusHistory",
+      "description": "Audit history subcollection for each job order"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "System output logs for dispatching customer notices"
+    }
+  }
+}

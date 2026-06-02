@@ -1,0 +1,225 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global safety net: Default deny all unhandled collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Admin/Staff explicit lookup in Firestore (no client claims trusted)
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isStaff() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && (getUserRole() == 'staff' || getUserRole() == 'admin');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // --- Entity Validation Helpers (The Anti-Update-Gap) ---
+    
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'email', 'role', 'createdAt'])
+        && data.id is string
+        && data.email is string
+        && data.email.size() <= 256
+        && data.email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$')
+        && data.role in ['customer', 'staff', 'admin']
+        && data.createdAt is timestamp;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll(['id', 'userId', 'status', 'totalPrice', 'createdAt', 'productType', 'quantity', 'specs', 'paymentStatus'])
+        && data.id is string
+        && data.id.size() <= 128
+        && data.userId is string
+        && data.userId.size() <= 128
+        && data.status in ['Received', 'File Review', 'In Production', 'Quality Check', 'Ready for Collection', 'Dispatched']
+        && data.totalPrice is number
+        && data.totalPrice >= 0
+        && data.createdAt is timestamp
+        && data.productType is string
+        && data.productType.size() <= 128
+        && data.quantity is number
+        && data.quantity > 0
+        && data.paymentStatus in ['unpaid', 'paid'];
+    }
+
+    function isValidOrderFile(data) {
+      return data.keys().hasAll(['id', 'orderId', 'fileName', 'fileUrl', 'fileSize', 'uploadedAt'])
+        && data.id is string
+        && data.orderId is string
+        && data.fileName is string
+        && data.fileName.size() <= 256
+        && data.fileUrl is string
+        && data.fileUrl.size() <= 2048
+        && data.fileSize is number
+        && data.fileSize > 0
+        && data.fileSize <= 209715200 // 200MB limit per file
+        && data.uploadedAt is timestamp;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['id', 'name', 'basePrice', 'active'])
+        && data.id is string
+        && data.name is string
+        && data.name.size() <= 128
+        && data.basePrice is number
+        && data.basePrice >= 0
+        && data.active is bool;
+    }
+
+    function isValidPricingRule(data) {
+      return data.keys().hasAll(['id', 'productId', 'ruleType', 'key', 'multiplier'])
+        && data.id is string
+        && data.productId is string
+        && data.ruleType in ['paper_stock', 'finish', 'turnaround', 'quantity_tier']
+        && data.key is string
+        && data.key.size() <= 128
+        && data.multiplier is number
+        && data.multiplier >= 0;
+    }
+
+    function isValidStatusHistory(data) {
+      return data.keys().hasAll(['id', 'orderId', 'fromStatus', 'toStatus', 'changedBy', 'timestamp'])
+        && data.id is string
+        && data.orderId is string
+        && data.fromStatus is string
+        && data.toStatus is string
+        && data.changedBy is string
+        && data.timestamp is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['id', 'userId', 'orderId', 'channel', 'content', 'sentAt'])
+        && data.id is string
+        && data.userId is string
+        && data.orderId is string
+        && data.channel in ['email', 'sms']
+        && data.content is string
+        && data.content.size() <= 1000
+        && data.sentAt is timestamp;
+    }
+
+    // --- Collection Routes ---
+
+    // 1. Users collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isStaff());
+      allow list: if isStaff();
+      
+      // Standard creation of user card during signup
+      allow create: if isSignedIn()
+        && isOwner(userId)
+        && isValidId(userId)
+        && isValidUser(incoming())
+        && incoming().role == 'customer'; // Block self-escalation to staff during signup
+
+      // Admin or staff can assign/modify roles or tags, customers can edit non-RBAC details
+      allow update: if isSignedIn()
+        && isOwner(userId)
+        && isValidUser(incoming())
+        && incoming().createdAt == existing().createdAt // createdAt is immutable
+        && (isStaff() || (incoming().role == existing().role && incoming().tags == existing().tags)); // Protect RBAC fields
+      
+      allow delete: if isStaff();
+    }
+
+    // 2. Orders collection
+    match /orders/{orderId} {
+      allow get: if true; // Public tracking by direct shareable URL
+      allow list: if isSignedIn() && (isStaff() || resource.data.userId == request.auth.uid); // Direct ownership check
+
+      allow create: if isSignedIn()
+        && isValidId(orderId)
+        && isValidOrder(incoming())
+        && isOwner(incoming().userId)
+        && incoming().status == 'Received' // Standard orders must start blank/received
+        && incoming().createdAt == request.time;
+
+      allow update: if isSignedIn()
+        && (isStaff() || isOwner(existing().userId))
+        && isValidOrder(incoming())
+        // Immutable values check
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        // Temporal/status locking check: Customers cannot change specs of completed orders
+        && (isStaff() || (
+            existing().status in ['Received', 'File Review'] 
+            && incoming().status == existing().status // Customer cannot change job status themselves
+            && incoming().totalPrice == existing().totalPrice // Customer cannot change pricing lock
+          ));
+
+      allow delete: if isStaff();
+
+      // Order Files Subcollection
+      match /order_files/{fileId} {
+        allow read: if isSignedIn() && (isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaff());
+        allow create: if isSignedIn()
+          && isValidId(fileId)
+          && isValidOrderFile(incoming())
+          && (isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaff())
+          && incoming().uploadedAt == request.time;
+        allow update, delete: if isStaff();
+      }
+
+      // Status History Subcollection
+      match /status_history/{historyId} {
+        allow read: if isSignedIn() && (isOwner(get(/databases/$(database)/documents/orders/$(orderId)).data.userId) || isStaff());
+        allow create: if isSignedIn()
+          && isValidId(historyId)
+          && isValidStatusHistory(incoming())
+          && isStaff() // Only Staff can log progression
+          && incoming().timestamp == request.time;
+        allow update, delete: if isStaff();
+      }
+    }
+
+    // 3. Products Catalogue collection
+    match /products/{productId} {
+      allow read: if true; // Any customer can fetch sizes/pricing info to calculate quote
+      allow create: if isValidId(productId) && isValidProduct(incoming()); // Allowed for database seeding
+      allow update, delete: if isStaff(); // Only Staff can edit catalog
+    }
+
+    // 4. Pricing Rules collection
+    match /pricing_rules/{ruleId} {
+      allow read: if true; // Any customer can retrieve pricing rules
+      allow create: if isValidId(ruleId) && isValidPricingRule(incoming()); // Allowed for database seeding
+      allow update, delete: if isStaff(); // Only Staff can edit pricing structures
+    }
+
+    // 5. Notifications collection
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && (isOwner(resource.data.userId) || isStaff());
+      allow list: if isSignedIn() && (isStaff() || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(notificationId)
+        && isValidNotification(incoming())
+        && incoming().sentAt == request.time;
+      allow update, delete: if isStaff();
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Postnet Print OS",
+  "description": "Professional print ordering and management platform for Postnet with customer portal and staff dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
