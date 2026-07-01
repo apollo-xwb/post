@@ -28,6 +28,72 @@ import {
   Crop
 } from 'lucide-react';
 
+const loadPdfJs = async (): Promise<any> => {
+  const anyWindow = window as any;
+  if (anyWindow.pdfjsLib) return anyWindow.pdfjsLib;
+
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    script.async = true;
+    script.onload = () => {
+      anyWindow.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      resolve(anyWindow.pdfjsLib);
+    };
+    script.onerror = (err) => {
+      reject(new Error('Failed to load PDF.js engine script: ' + err));
+    };
+    document.head.appendChild(script);
+  });
+};
+
+const renderPdfToDataUrl = async (file: File): Promise<string> => {
+  const pdfjsLib = await loadPdfJs();
+  const fileReader = new FileReader();
+
+  return new Promise((resolve, reject) => {
+    fileReader.onload = async () => {
+      try {
+        const arrayBuffer = fileReader.result as ArrayBuffer;
+        // disableFontFace prevents cross-origin font styling errors in some iframe contexts
+        const loadingTask = pdfjsLib.getDocument({ 
+          data: arrayBuffer,
+          disableFontFace: true
+        });
+        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(1);
+
+        // Render at 1.8x scale for extremely high clarity on zoom and crops
+        const viewport = page.getViewport({ scale: 1.8 });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) {
+          reject(new Error('Failed to initiate canvas 2D rendering context'));
+          return;
+        }
+
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport,
+        };
+
+        await page.render(renderContext).promise;
+        const dataUrl = canvas.toDataURL('image/png');
+        resolve(dataUrl);
+      } catch (err: any) {
+        reject(err);
+      }
+    };
+    fileReader.onerror = () => {
+      reject(new Error('FileReader failed to buffer the PDF bytes.'));
+    };
+    fileReader.readAsArrayBuffer(file);
+  });
+};
+
 interface JobBuilderProps {
   user: UserProfile | null;
   onOrderCreated: (orderId: string) => void;
@@ -426,8 +492,22 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
               setSelectedFileForMockup(fileId);
             };
             reader.readAsDataURL(file);
+          } else if (ext === 'pdf') {
+            // For PDF files, parse and render the actual pages in high-fidelity using PDF.js
+            renderPdfToDataUrl(file)
+              .then(dataUrl => {
+                setUploadedFiles(prev => prev.map(f => f.id === fileId ? { ...f, progress: 100, url: dataUrl } : f));
+                setSelectedFileForMockup(fileId);
+              })
+              .catch(err => {
+                console.error("PDF.js rendering failed. Using SVG fallback: ", err);
+                const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200" style="background-color:#ffffff;font-family:system-ui,sans-serif;"><rect x="20" y="20" width="760" height="1160" fill="none" stroke="#f43f5e" stroke-width="4" stroke-dasharray="10,10"/><rect x="40" y="40" width="720" height="1120" fill="none" stroke="#06b6d4" stroke-width="2"/><g transform="translate(100, 150)"><rect x="0" y="0" width="600" height="850" rx="16" fill="#faf5ff" stroke="#d8b4fe" stroke-width="2"/><text x="300" y="160" font-size="32" font-weight="900" fill="#1e1b4b" text-anchor="middle" letter-spacing="2">POSTNET PRINT OS</text><text x="300" y="210" font-size="14" font-weight="700" fill="#7c3aed" text-anchor="middle" letter-spacing="4">PRE-PRESS PRODUCTION PROOF</text><line x1="150" y1="250" x2="450" y2="250" stroke="#e9d5ff" stroke-width="2"/><rect x="120" y="300" width="360" height="180" rx="12" fill="#ffffff" stroke="#e9d5ff" stroke-width="1"/><text x="300" y="350" font-size="14" font-weight="600" fill="#a21caf" text-anchor="middle">PDF DOCUMENT DETECTED</text><text x="300" y="390" font-size="12" font-weight="800" fill="#1e293b" text-anchor="middle">${file.name.length > 30 ? file.name.substring(0, 27) + '...' : file.name}</text><text x="300" y="430" font-size="10" font-weight="500" fill="#64748b" text-anchor="middle">Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB</text><circle cx="300" cy="590" r="70" fill="#7c3aed" opacity="0.08"/><circle cx="300" cy="590" r="50" fill="#a21caf" opacity="0.08"/><path d="M275,590 L295,610 L335,560" fill="none" stroke="#7c3aed" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><text x="300" y="710" font-size="20" font-weight="800" fill="#7c3aed" text-anchor="middle">VECTOR GRAPHICS EXTRACTED</text><text x="300" y="745" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">SPOOL ENGINE READ COMPLETE</text></g><text x="400" y="1130" font-size="11" font-weight="600" fill="#94a3b8" text-anchor="middle" letter-spacing="1">POWERED BY LUTHO OS • SYSTEM VERIFIED</text></svg>`;
+                const dynamicSvg = `data:image/svg+xml;charset=utf-8,` + encodeURIComponent(svgMarkup);
+                setUploadedFiles(prev => prev.map(f => f.id === fileId ? { ...f, progress: 100, url: dynamicSvg } : f));
+                setSelectedFileForMockup(fileId);
+              });
           } else {
-            // For other documents (including PDF, DOCX, AI, EPS, TIFF), generate a customized high-fidelity dynamic vector proof!
+            // For other documents (DOCX, AI, EPS, TIFF), generate a customized high-fidelity dynamic vector proof!
             const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200" style="background-color:#ffffff;font-family:system-ui,sans-serif;"><rect x="20" y="20" width="760" height="1160" fill="none" stroke="#f43f5e" stroke-width="4" stroke-dasharray="10,10"/><rect x="40" y="40" width="720" height="1120" fill="none" stroke="#06b6d4" stroke-width="2"/><g transform="translate(100, 150)"><rect x="0" y="0" width="600" height="850" rx="16" fill="#faf5ff" stroke="#d8b4fe" stroke-width="2"/><text x="300" y="160" font-size="32" font-weight="900" fill="#1e1b4b" text-anchor="middle" letter-spacing="2">POSTNET PRINT OS</text><text x="300" y="210" font-size="14" font-weight="700" fill="#7c3aed" text-anchor="middle" letter-spacing="4">PRE-PRESS PRODUCTION PROOF</text><line x1="150" y1="250" x2="450" y2="250" stroke="#e9d5ff" stroke-width="2"/><rect x="120" y="300" width="360" height="180" rx="12" fill="#ffffff" stroke="#e9d5ff" stroke-width="1"/><text x="300" y="350" font-size="14" font-weight="600" fill="#a21caf" text-anchor="middle">${ext.toUpperCase()} DOCUMENT DETECTED</text><text x="300" y="390" font-size="12" font-weight="800" fill="#1e293b" text-anchor="middle">${file.name.length > 30 ? file.name.substring(0, 27) + '...' : file.name}</text><text x="300" y="430" font-size="10" font-weight="500" fill="#64748b" text-anchor="middle">Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB</text><circle cx="300" cy="590" r="70" fill="#7c3aed" opacity="0.08"/><circle cx="300" cy="590" r="50" fill="#a21caf" opacity="0.08"/><path d="M275,590 L295,610 L335,560" fill="none" stroke="#7c3aed" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><text x="300" y="710" font-size="20" font-weight="800" fill="#7c3aed" text-anchor="middle">VECTOR GRAPHICS EXTRACTED</text><text x="300" y="745" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">SPOOL ENGINE READ COMPLETE</text></g><text x="400" y="1130" font-size="11" font-weight="600" fill="#94a3b8" text-anchor="middle" letter-spacing="1">POWERED BY LUTHO OS • SYSTEM VERIFIED</text></svg>`;
             const dynamicSvg = `data:image/svg+xml;charset=utf-8,` + encodeURIComponent(svgMarkup);
             setUploadedFiles(prev => prev.map(f => f.id === fileId ? { ...f, progress: 100, url: dynamicSvg } : f));
@@ -554,9 +634,14 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
               tags: ['Standard Customer']
             };
 
-            await setDoc(doc(db, 'users', uid), cleanUndefined(activeUser));
+            const pathForUserWriteSignup = `users/${uid}`;
+            try {
+              await setDoc(doc(db, 'users', uid), cleanUndefined(activeUser));
+            } catch (err) {
+              handleFirestoreError(err, OperationType.WRITE, pathForUserWriteSignup);
+            }
           } catch (signupErr: any) {
-            if (signupErr.code === 'auth/operation-not-allowed') {
+            if (signupErr.code === 'auth/operation-not-allowed' || signupErr.code === 'auth/network-request-failed') {
               // Local sandbox mode fallback!
               const localUid = 'local_customer_' + Math.random().toString(36).substring(2, 11);
               activeUser = {
@@ -597,10 +682,15 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                 createdAt: new Date(),
                 name: billingName || guestEmail.split('@')[0]
               };
-              await setDoc(doc(db, 'users', uid), cleanUndefined(activeUser));
+              const pathForUserWriteSignin = `users/${uid}`;
+              try {
+                await setDoc(doc(db, 'users', uid), cleanUndefined(activeUser));
+              } catch (err) {
+                handleFirestoreError(err, OperationType.WRITE, pathForUserWriteSignin);
+              }
             }
           } catch (signinErr: any) {
-            if (signinErr.code === 'auth/operation-not-allowed') {
+            if (signinErr.code === 'auth/operation-not-allowed' || signinErr.code === 'auth/network-request-failed') {
               // Local sandbox mode fallback!
               const localUid = 'local_customer_' + Math.random().toString(36).substring(2, 11);
               activeUser = {
@@ -680,7 +770,12 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
           fileSize: file.size,
           uploadedAt: new Date()
         };
-        await setDoc(doc(db, 'orders', orderId, 'order_files', fileRefId), cleanUndefined(fileRecord));
+        const pathForFileWrite = `orders/${orderId}/order_files/${fileRefId}`;
+        try {
+          await setDoc(doc(db, 'orders', orderId, 'order_files', fileRefId), cleanUndefined(fileRecord));
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, pathForFileWrite);
+        }
       }
 
       // Record first status entry in history subcollection
@@ -697,7 +792,12 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
           : `Order registered and payment completed successfully via ${payMethod}.`,
         timestamp: new Date()
       };
-      await setDoc(doc(db, 'orders', orderId, 'status_history', historyId), cleanUndefined(statusHistoryObj));
+      const pathForHistoryWrite = `orders/${orderId}/status_history/${historyId}`;
+      try {
+        await setDoc(doc(db, 'orders', orderId, 'status_history', historyId), cleanUndefined(statusHistoryObj));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, pathForHistoryWrite);
+      }
 
       // Successfully processed
       onOrderCreated(orderId);

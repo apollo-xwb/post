@@ -29,7 +29,9 @@ import {
   FileSpreadsheet,
   Layers,
   Send,
-  Info
+  Info,
+  Eye,
+  ExternalLink
 } from 'lucide-react';
 
 const handleDirectPrint = (order: Order, files: OrderFile[]) => {
@@ -292,6 +294,68 @@ const handleDirectPrint = (order: Order, files: OrderFile[]) => {
   printWindow.document.close();
 };
 
+const handlePrintDocument = (fileUrl: string, fileName: string) => {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Please allow popups to print the file.');
+    return;
+  }
+  
+  const isImage = /\.(jpeg|jpg|gif|png|webp|svg)$/i.test(fileName) || fileUrl.includes('image');
+  
+  if (isImage) {
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print - ${fileName}</title>
+          <style>
+            body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: white; }
+            img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+            @media print {
+              body { margin: 0; }
+              img { max-width: 100%; max-height: 100%; page-break-inside: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <img src="${fileUrl}" onload="window.print(); window.close();" />
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  } else {
+    // For PDFs or other files, embed an iframe and trigger print
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print - ${fileName}</title>
+          <style>
+            body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+            iframe { width: 100%; height: 100%; border: none; }
+          </style>
+        </head>
+        <body>
+          <iframe src="${fileUrl}" id="pdf-iframe"></iframe>
+          <script>
+            const iframe = document.getElementById('pdf-iframe');
+            iframe.onload = function() {
+              setTimeout(function() {
+                try {
+                  iframe.contentWindow.focus();
+                  iframe.contentWindow.print();
+                } catch(e) {
+                  window.print();
+                }
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
+};
+
 interface StaffDashboardProps {
   user: UserProfile;
   activeView: 'staff-queue' | 'staff-catalog' | 'staff-reports';
@@ -340,6 +404,7 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
   // Loading indicator for action
   const [actionLoading, setActionLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<OrderFile | null>(null);
 
   // 1. Fetch orders in real time
   useEffect(() => {
@@ -1039,18 +1104,49 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
                           <p className="text-xs text-zinc-500 italic p-2 bg-slate-50 rounded border">No uploaded files registered.</p>
                         ) : (
                           inspectOrderFiles.map(f => (
-                            <div key={f.id} className="p-2 bg-slate-50 border rounded-xl flex items-center justify-between text-xs font-mono">
-                              <span className="truncate max-w-[140px] font-semibold">{f.fileName}</span>
-                              <a
-                                href={f.fileUrl}
-                                download
-                                target="_blank"
-                                rel="noreferrer referrerPolicy"
-                                className="text-[10px] text-brand-accent hover:underline flex items-center"
-                              >
-                                <Download className="h-3 w-3 mr-0.5" />
-                                <span>{(f.fileSize / (1024*1024)).toFixed(1)}M</span>
-                              </a>
+                            <div key={f.id} className="p-2.5 bg-slate-50 hover:bg-slate-100/70 border rounded-xl flex flex-col space-y-2 text-xs font-mono transition-colors">
+                              <div className="flex items-center justify-between">
+                                <span className="truncate font-semibold text-slate-700 block max-w-[170px]" title={f.fileName}>
+                                  {f.fileName}
+                                </span>
+                                <span className="text-[10px] text-zinc-400">
+                                  {(f.fileSize / (1024*1024)).toFixed(2)} MB
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center justify-end space-x-1.5 pt-1 border-t border-slate-250">
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewFile(f)}
+                                  className="py-1 px-2 bg-brand-light text-brand-blue hover:bg-brand-blue hover:text-white rounded text-[10px] font-bold flex items-center space-x-1 transition-all cursor-pointer"
+                                  title="Open visual document preview"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  <span>Preview</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handlePrintDocument(f.fileUrl, f.fileName)}
+                                  className="py-1 px-2 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white rounded text-[10px] font-bold flex items-center space-x-1 transition-all cursor-pointer"
+                                  title="Direct print this document"
+                                >
+                                  <Printer className="h-3 w-3" />
+                                  <span>Print</span>
+                                </button>
+
+                                <a
+                                  href={f.fileUrl}
+                                  download
+                                  target="_blank"
+                                  rel="noreferrer referrerPolicy"
+                                  className="py-1 px-2 bg-slate-200 text-slate-700 hover:bg-slate-700 hover:text-white rounded text-[10px] font-bold flex items-center space-x-1 transition-all"
+                                  title="Download file to local storage"
+                                >
+                                  <Download className="h-3 w-3" />
+                                  <span>Save</span>
+                                </a>
+                              </div>
                             </div>
                           ))
                         )}
@@ -1298,6 +1394,109 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
 
           </div>
 
+        </div>
+      )}
+
+      {/* Document Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in" id="preview-modal">
+          <div className="relative bg-white rounded-2xl max-w-4xl w-full shadow-2xl border flex flex-col h-[85vh]">
+            {/* Modal Header */}
+            <div className="p-4 border-b flex items-center justify-between bg-slate-50 rounded-t-2xl">
+              <div>
+                <h3 className="text-sm font-extrabold text-brand-dark truncate max-w-[500px]">
+                  Document Preview: {previewFile.fileName}
+                </h3>
+                <p className="text-[10px] text-zinc-500 font-mono">
+                  Size: {(previewFile.fileSize / (1024*1024)).toFixed(2)} MB
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => handlePrintDocument(previewFile.fileUrl, previewFile.fileName)}
+                  className="py-1.5 px-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-xs flex items-center space-x-1.5 shadow transition-all cursor-pointer"
+                  title="Direct print this document"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  <span>Direct Print File</span>
+                </button>
+                <a
+                  href={previewFile.fileUrl}
+                  download
+                  target="_blank"
+                  rel="noreferrer referrerPolicy"
+                  className="py-1.5 px-3 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-lg text-xs flex items-center space-x-1.5 transition-all"
+                  title="Download document file"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewFile(null)}
+                  className="p-1.5 bg-zinc-250 hover:bg-zinc-300 text-zinc-700 rounded-lg text-xs transition-all cursor-pointer font-bold"
+                  title="Close preview"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content / Preview Frame */}
+            <div className="p-6 flex-1 bg-zinc-100 flex items-center justify-center overflow-auto">
+              {(() => {
+                const isImg = /\.(jpeg|jpg|gif|png|webp|svg)$/i.test(previewFile.fileName) || previewFile.fileUrl.includes('image');
+                const isPdf = /\.pdf$/i.test(previewFile.fileName) || previewFile.fileUrl.includes('.pdf');
+
+                if (isImg) {
+                  return (
+                    <img
+                      src={previewFile.fileUrl}
+                      alt={previewFile.fileName}
+                      referrerPolicy="no-referrer"
+                      className="max-h-[60vh] max-w-full object-contain mx-auto rounded-lg shadow border bg-white"
+                    />
+                  );
+                } else if (isPdf) {
+                  return (
+                    <iframe
+                      src={previewFile.fileUrl}
+                      className="w-full h-full rounded-lg shadow border bg-white"
+                      title={previewFile.fileName}
+                    />
+                  );
+                } else {
+                  return (
+                    <div className="text-center p-8 bg-white rounded-xl shadow max-w-md border">
+                      <p className="text-zinc-500 text-xs font-semibold mb-3">
+                        Inline web preview is not supported for this file format. You can still print or download the original file directly.
+                      </p>
+                      <div className="flex justify-center space-x-3">
+                        <button
+                          type="button"
+                          onClick={() => handlePrintDocument(previewFile.fileUrl, previewFile.fileName)}
+                          className="py-1.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-xs flex items-center space-x-1.5 shadow"
+                        >
+                          <Printer className="h-4 w-4" />
+                          <span>Print File anyway</span>
+                        </button>
+                        <a
+                          href={previewFile.fileUrl}
+                          target="_blank"
+                          rel="noreferrer referrerPolicy"
+                          className="py-1.5 px-4 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg text-xs flex items-center space-x-1.5 shadow"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          <span>Open in New Tab</span>
+                        </a>
+                      </div>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
+          </div>
         </div>
       )}
 
