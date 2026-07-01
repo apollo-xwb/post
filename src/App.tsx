@@ -81,8 +81,24 @@ export default function App() {
           console.error('Error fetching user profile:', err);
         }
       } else {
-        setUser(null);
-        setActiveTab('job-builder');
+        const localSaved = localStorage.getItem('local_sandbox_user');
+        if (localSaved) {
+          try {
+            const profile = JSON.parse(localSaved) as UserProfile;
+            setUser(profile);
+            if (profile.role === 'staff' || profile.role === 'admin') {
+              setActiveTab('staff-queue');
+            } else {
+              setActiveTab('order-tracker');
+            }
+          } catch (e) {
+            setUser(null);
+            setActiveTab('job-builder');
+          }
+        } else {
+          setUser(null);
+          setActiveTab('job-builder');
+        }
       }
       setAuthLoading(false);
     });
@@ -114,6 +130,7 @@ export default function App() {
   const handleLogout = async () => {
     setAuthLoading(true);
     try {
+      localStorage.removeItem('local_sandbox_user');
       await signOut(auth);
       setUser(null);
       setActiveTab('job-builder');
@@ -127,6 +144,18 @@ export default function App() {
   // Helper routine for custom workflow routing on order creation
   const handleOrderCreatedWorkflow = (orderId: string) => {
     setSelectedOrderIdOnCreate(orderId);
+    
+    // Check if a local sandbox user was created during guest checkout and set state
+    const localSaved = localStorage.getItem('local_sandbox_user');
+    if (localSaved) {
+      try {
+        const profile = JSON.parse(localSaved) as UserProfile;
+        setUser(profile);
+      } catch (e) {
+        console.error('Failed to restore local user during checkout finish:', e);
+      }
+    }
+    
     setActiveTab('order-tracker');
   };
 
@@ -359,6 +388,7 @@ export default function App() {
           <div className="space-y-1 text-center md:text-left">
             <p className="font-bold text-zinc-400">PostNet Print OS Operations Portal</p>
             <p className="text-[11px] text-zinc-500">VAT Reg: 4500123456 • Sovereign Print Production Infrastructure</p>
+            <p className="text-[10px] font-black tracking-wider text-red-500 uppercase">powered by lutho os</p>
           </div>
           <p className="font-mono text-[10px] text-zinc-600 text-center md:text-right">
             Securely Managed with Integrated Cloud Firestore Protocols • Confidentially Restricted Environment

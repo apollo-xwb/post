@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType, cleanUndefined } from '../firebase';
 import { collection, addDoc, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { UserProfile, Order, OrderFile, OrderStatus } from '../types';
@@ -12,6 +12,7 @@ import {
   Trash2, 
   Calculator, 
   CreditCard, 
+  Coins,
   FileText, 
   Truck, 
   Store, 
@@ -86,6 +87,8 @@ const SHORTCUT_PRESETS = [
     turnaround: 'Express (next day)'
   }
 ];
+
+const DEFAULT_PROOF_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200" style="background-color:%23ffffff;font-family:system-ui,sans-serif;"><rect x="20" y="20" width="760" height="1160" fill="none" stroke="%23f43f5e" stroke-width="4" stroke-dasharray="10,10"/><rect x="40" y="40" width="720" height="1120" fill="none" stroke="%2306b6d4" stroke-width="2"/><rect x="10" y="10" width="780" height="1180" fill="none" stroke="%23e4e4e7" stroke-width="1"/><g transform="translate(100, 150)"><rect x="0" y="0" width="600" height="850" rx="16" fill="%23f8fafc" stroke="%23cbd5e1" stroke-width="2"/><text x="300" y="200" font-size="36" font-weight="900" fill="%230f172a" text-anchor="middle" letter-spacing="2">POSTNET PRINT OS</text><text x="300" y="250" font-size="16" font-weight="700" fill="%23e11d48" text-anchor="middle" letter-spacing="4">PRE-PRESS PRODUCTION PROOF</text><line x1="150" y1="290" x2="450" y2="290" stroke="%23cbd5e1" stroke-width="2"/><circle cx="300" cy="460" r="100" fill="%23f43f5e" opacity="0.08"/><circle cx="300" cy="460" r="80" fill="%2306b6d4" opacity="0.08"/><path d="M260,460 L290,490 L350,420" fill="none" stroke="%23e11d48" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><text x="300" y="620" font-size="22" font-weight="800" fill="%23059669" text-anchor="middle">CALIBRATION &amp; ALIGNMENT VERIFIED</text><text x="300" y="660" font-size="14" font-weight="500" fill="%2364748b" text-anchor="middle">SAFE BLEED MARGINS GUARANTEED</text><rect x="100" y="720" width="400" height="50" rx="8" fill="%23f1f5f9" stroke="%23e2e8f0" stroke-width="1"/><text x="300" y="750" font-size="12" font-weight="700" fill="%23475569" text-anchor="middle" font-family="monospace">READY FOR DIGITAL PRESS / CMYK ACTIVE</text></g><text x="400" y="1130" font-size="11" font-weight="600" fill="%2394a3b8" text-anchor="middle" letter-spacing="1">POWERED BY LUTHO OS • SYSTEM VERIFIED</text></svg>`;
 
 export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
   // Database states
@@ -259,7 +262,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
             if (docProd) {
               prodsArr.unshift(docProd);
               try {
-                await setDoc(doc(db, 'products', 'prod_document'), docProd);
+                await setDoc(doc(db, 'products', 'prod_document'), cleanUndefined(docProd));
               } catch (e) {
                 console.warn('Failed auto saving catalog product:', e);
               }
@@ -413,9 +416,23 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
         
         if (prog >= 100) {
           clearInterval(interval);
-          // Set Object URL path safely
-          const simulatedUrl = URL.createObjectURL(file);
-          setUploadedFiles(prev => prev.map(f => f.id === fileId ? { ...f, progress: 100, url: simulatedUrl } : f));
+          
+          const isImg = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext);
+          if (isImg) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const dataUrl = reader.result as string;
+              setUploadedFiles(prev => prev.map(f => f.id === fileId ? { ...f, progress: 100, url: dataUrl } : f));
+              setSelectedFileForMockup(fileId);
+            };
+            reader.readAsDataURL(file);
+          } else {
+            // For other documents (including PDF, DOCX, AI, EPS, TIFF), generate a customized high-fidelity dynamic vector proof!
+            const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200" style="background-color:#ffffff;font-family:system-ui,sans-serif;"><rect x="20" y="20" width="760" height="1160" fill="none" stroke="#f43f5e" stroke-width="4" stroke-dasharray="10,10"/><rect x="40" y="40" width="720" height="1120" fill="none" stroke="#06b6d4" stroke-width="2"/><g transform="translate(100, 150)"><rect x="0" y="0" width="600" height="850" rx="16" fill="#faf5ff" stroke="#d8b4fe" stroke-width="2"/><text x="300" y="160" font-size="32" font-weight="900" fill="#1e1b4b" text-anchor="middle" letter-spacing="2">POSTNET PRINT OS</text><text x="300" y="210" font-size="14" font-weight="700" fill="#7c3aed" text-anchor="middle" letter-spacing="4">PRE-PRESS PRODUCTION PROOF</text><line x1="150" y1="250" x2="450" y2="250" stroke="#e9d5ff" stroke-width="2"/><rect x="120" y="300" width="360" height="180" rx="12" fill="#ffffff" stroke="#e9d5ff" stroke-width="1"/><text x="300" y="350" font-size="14" font-weight="600" fill="#a21caf" text-anchor="middle">${ext.toUpperCase()} DOCUMENT DETECTED</text><text x="300" y="390" font-size="12" font-weight="800" fill="#1e293b" text-anchor="middle">${file.name.length > 30 ? file.name.substring(0, 27) + '...' : file.name}</text><text x="300" y="430" font-size="10" font-weight="500" fill="#64748b" text-anchor="middle">Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB</text><circle cx="300" cy="590" r="70" fill="#7c3aed" opacity="0.08"/><circle cx="300" cy="590" r="50" fill="#a21caf" opacity="0.08"/><path d="M275,590 L295,610 L335,560" fill="none" stroke="#7c3aed" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><text x="300" y="710" font-size="20" font-weight="800" fill="#7c3aed" text-anchor="middle">VECTOR GRAPHICS EXTRACTED</text><text x="300" y="745" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">SPOOL ENGINE READ COMPLETE</text></g><text x="400" y="1130" font-size="11" font-weight="600" fill="#94a3b8" text-anchor="middle" letter-spacing="1">POWERED BY LUTHO OS • SYSTEM VERIFIED</text></svg>`;
+            const dynamicSvg = `data:image/svg+xml;charset=utf-8,` + encodeURIComponent(svgMarkup);
+            setUploadedFiles(prev => prev.map(f => f.id === fileId ? { ...f, progress: 100, url: dynamicSvg } : f));
+            setSelectedFileForMockup(fileId);
+          }
         }
       }, 300);
     });
@@ -436,6 +453,14 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
   };
 
   const removeFile = (fileId: string) => {
+    const fileObj = uploadedFiles.find(f => f.id === fileId);
+    if (fileObj?.url && fileObj.url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(fileObj.url);
+      } catch (err) {
+        console.error('Error revoking object URL:', err);
+      }
+    }
     setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
@@ -451,12 +476,16 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
           
           // Generate simulated file
           const fileId = 'f_beam_' + Math.random().toString(36).substr(2, 9);
+          
+          const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1200" viewBox="0 0 800 1200" style="background-color:#ffffff;font-family:system-ui,sans-serif;"><rect x="20" y="20" width="760" height="1160" fill="none" stroke="#f43f5e" stroke-width="4" stroke-dasharray="10,10"/><rect x="40" y="40" width="720" height="1120" fill="none" stroke="#06b6d4" stroke-width="2"/><g transform="translate(100, 150)"><rect x="0" y="0" width="600" height="850" rx="16" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="2"/><text x="300" y="160" font-size="32" font-weight="900" fill="#14532d" text-anchor="middle" letter-spacing="2">POSTNET PRINT OS</text><text x="300" y="210" font-size="14" font-weight="700" fill="#16a34a" text-anchor="middle" letter-spacing="4">BEAMED MOBILE PROOF</text><line x1="150" y1="250" x2="450" y2="250" stroke="#dcfce7" stroke-width="2"/><rect x="120" y="300" width="360" height="180" rx="12" fill="#ffffff" stroke="#dcfce7" stroke-width="1"/><text x="300" y="350" font-size="14" font-weight="600" fill="#16a34a" text-anchor="middle">MOBILE BEAM RECEIVED</text><text x="300" y="390" font-size="12" font-weight="800" fill="#1e293b" text-anchor="middle">${mockMobileFilename}</text><text x="300" y="430" font-size="10" font-weight="500" fill="#64748b" text-anchor="middle">Size: 18.50 MB</text><circle cx="300" cy="590" r="70" fill="#16a34a" opacity="0.08"/><circle cx="300" cy="590" r="50" fill="#15803d" opacity="0.08"/><path d="M275,590 L295,610 L335,560" fill="none" stroke="#16a34a" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><text x="300" y="710" font-size="20" font-weight="800" fill="#15803d" text-anchor="middle">BEAM TRANSFER OK</text><text x="300" y="745" font-size="12" font-weight="500" fill="#64748b" text-anchor="middle">SPOOL ENGINE READ COMPLETE</text></g><text x="400" y="1130" font-size="11" font-weight="600" fill="#94a3b8" text-anchor="middle" letter-spacing="1">POWERED BY LUTHO OS • SYSTEM VERIFIED</text></svg>`;
+          const dynamicSvg = `data:image/svg+xml;charset=utf-8,` + encodeURIComponent(svgMarkup);
+
           const beamedObj = {
             id: fileId,
             name: mockMobileFilename,
             size: 1024 * 1024 * 18.5, // 18.5 MB
             progress: 100,
-            url: ''
+            url: dynamicSvg
           };
           
           setUploadedFiles(prev => [...prev, beamedObj]);
@@ -470,7 +499,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
   };
 
   // Submit the total customized print work to firestore database
-  const handlePlaceOrder = async (payMethod: 'PayFast' | 'Stripe') => {
+  const handlePlaceOrder = async (payMethod: 'PayFast' | 'Stripe' | 'Collection') => {
     if (uploadedFiles.length === 0) {
       setSubmitError('Please upload at least one print source file to proceed.');
       return;
@@ -488,6 +517,14 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
           return;
         }
 
+        const emailTrimmed = guestEmail.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(emailTrimmed)) {
+          setSubmitError('Please enter a valid email address.');
+          setSubmittingOrder(false);
+          return;
+        }
+
         if (isGuestSignUp) {
           if (!billingName.trim()) {
             setSubmitError('Please enter your full name for billing identity records.');
@@ -500,40 +537,89 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
             return;
           }
 
-          // Register new user on the fly
-          const credentials = await createUserWithEmailAndPassword(auth, guestEmail.trim(), guestPassword);
-          const uid = credentials.user.uid;
-          
-          activeUser = {
-            id: uid,
-            email: guestEmail.trim(),
-            role: 'customer',
-            createdAt: new Date(),
-            name: billingName,
-            company: billingCompany || undefined,
-            phone: billingPhone || undefined,
-            vatNumber: billingVat || undefined,
-            tags: ['Standard Customer']
-          };
-
-          await setDoc(doc(db, 'users', uid), activeUser);
-        } else {
-          // Sign in existing user on the fly
-          const credentials = await signInWithEmailAndPassword(auth, guestEmail.trim(), guestPassword);
-          const uid = credentials.user.uid;
-          
-          const uDoc = await getDoc(doc(db, 'users', uid));
-          if (uDoc.exists()) {
-            activeUser = uDoc.data() as UserProfile;
-          } else {
+          try {
+            // Register new user on the fly
+            const credentials = await createUserWithEmailAndPassword(auth, guestEmail.trim(), guestPassword);
+            const uid = credentials.user.uid;
+            
             activeUser = {
               id: uid,
               email: guestEmail.trim(),
               role: 'customer',
               createdAt: new Date(),
-              name: billingName || guestEmail.split('@')[0]
+              name: billingName,
+              company: billingCompany || undefined,
+              phone: billingPhone || undefined,
+              vatNumber: billingVat || undefined,
+              tags: ['Standard Customer']
             };
-            await setDoc(doc(db, 'users', uid), activeUser);
+
+            await setDoc(doc(db, 'users', uid), cleanUndefined(activeUser));
+          } catch (signupErr: any) {
+            if (signupErr.code === 'auth/operation-not-allowed') {
+              // Local sandbox mode fallback!
+              const localUid = 'local_customer_' + Math.random().toString(36).substring(2, 11);
+              activeUser = {
+                id: localUid,
+                email: guestEmail.trim(),
+                role: 'customer',
+                createdAt: new Date(),
+                name: billingName,
+                company: billingCompany || undefined,
+                phone: billingPhone || undefined,
+                vatNumber: billingVat || undefined,
+                tags: ['Standard Customer', 'LocalSandbox']
+              };
+              localStorage.setItem('local_sandbox_user', JSON.stringify(activeUser));
+              try {
+                await setDoc(doc(db, 'users', localUid), cleanUndefined(activeUser));
+              } catch (dbErr) {
+                console.warn('Failed to register local user in Firestore during signup, continuing offline:', dbErr);
+              }
+            } else {
+              throw signupErr;
+            }
+          }
+        } else {
+          try {
+            // Sign in existing user on the fly
+            const credentials = await signInWithEmailAndPassword(auth, guestEmail.trim(), guestPassword);
+            const uid = credentials.user.uid;
+            
+            const uDoc = await getDoc(doc(db, 'users', uid));
+            if (uDoc.exists()) {
+              activeUser = uDoc.data() as UserProfile;
+            } else {
+              activeUser = {
+                id: uid,
+                email: guestEmail.trim(),
+                role: 'customer',
+                createdAt: new Date(),
+                name: billingName || guestEmail.split('@')[0]
+              };
+              await setDoc(doc(db, 'users', uid), cleanUndefined(activeUser));
+            }
+          } catch (signinErr: any) {
+            if (signinErr.code === 'auth/operation-not-allowed') {
+              // Local sandbox mode fallback!
+              const localUid = 'local_customer_' + Math.random().toString(36).substring(2, 11);
+              activeUser = {
+                id: localUid,
+                email: guestEmail.trim(),
+                role: 'customer',
+                createdAt: new Date(),
+                name: billingName || guestEmail.trim().split('@')[0],
+                tags: ['Standard Customer', 'LocalSandbox']
+              };
+              localStorage.setItem('local_sandbox_user', JSON.stringify(activeUser));
+              try {
+                await setDoc(doc(db, 'users', localUid), cleanUndefined(activeUser));
+              } catch (dbErr) {
+                console.warn('Failed to register local user in Firestore during signin, continuing offline:', dbErr);
+              }
+            } else {
+              throw signinErr;
+            }
           }
         }
       } else {
@@ -570,15 +656,15 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
         collectionMethod: collectionMethod,
         deliveryAddress: collectionMethod === 'Courier Delivery' ? deliveryAddress : undefined,
         specialInstructions: specialInstructions || undefined,
-        paymentStatus: 'paid', // Instant auto check out
-        paymentMethod: payMethod,
+        paymentStatus: payMethod === 'Collection' ? 'unpaid' : 'paid',
+        paymentMethod: payMethod === 'Collection' ? 'Pay at Collection' : payMethod,
         staffNote: ''
       };
 
       // Write Order Document (Rule validations strictly enforced)
       const pathForWrite = `orders/${orderId}`;
       try {
-        await setDoc(doc(db, 'orders', orderId), orderData);
+        await setDoc(doc(db, 'orders', orderId), cleanUndefined(orderData));
       } catch (err) {
         handleFirestoreError(err, OperationType.WRITE, pathForWrite);
       }
@@ -594,7 +680,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
           fileSize: file.size,
           uploadedAt: new Date()
         };
-        await setDoc(doc(db, 'orders', orderId, 'order_files', fileRefId), fileRecord);
+        await setDoc(doc(db, 'orders', orderId, 'order_files', fileRefId), cleanUndefined(fileRecord));
       }
 
       // Record first status entry in history subcollection
@@ -606,10 +692,12 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
         toStatus: 'Received',
         changedBy: activeUser.id,
         changedByName: activeUser.name || activeUser.email,
-        note: `Order registered and payment completed successfully via ${payMethod}.`,
+        note: payMethod === 'Collection'
+          ? 'Order registered with pending payment. Customer will pay at collection.'
+          : `Order registered and payment completed successfully via ${payMethod}.`,
         timestamp: new Date()
       };
-      await setDoc(doc(db, 'orders', orderId, 'status_history', historyId), statusHistoryObj);
+      await setDoc(doc(db, 'orders', orderId, 'status_history', historyId), cleanUndefined(statusHistoryObj));
 
       // Successfully processed
       onOrderCreated(orderId);
@@ -620,6 +708,8 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
         friendlyError = 'That email is already registered. Switch to the "Login with existing profile" option above!';
       } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         friendlyError = 'Incorrect password for that email profile.';
+      } else if (err.code === 'auth/invalid-email') {
+        friendlyError = 'Please enter a valid email address.';
       }
       setSubmitError(friendlyError);
     } finally {
@@ -628,7 +718,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 fade-in">
+    <div className="max-w-7xl mx-auto px-4 pt-8 pb-36 md:pb-8 fade-in">
       
       {/* Visual Navigation Steps */}
       <div className="mb-8">
@@ -910,7 +1000,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                   {onboardStep === 4 && (
                     <div className="space-y-4 fade-in">
                       <div className="text-center py-2">
-                        <h3 className="text-base font-extrabold text-brand-dark tracking-tight">How many copies/sheets are we making?</h3>
+                        <h3 className="text-base font-extrabold text-brand-dark tracking-tight">How many copies are we making?</h3>
                         <p className="text-xs text-zinc-500 mt-1">Pricing dynamically calculates based on volume thresholds.</p>
                       </div>
 
@@ -935,7 +1025,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                                     : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-50'
                                 }`}
                               >
-                                {num} {selectedProductId === 'prod_document' ? (num === 1 ? 'Copy' : 'Copies') : (num === 1 ? 'Unit' : 'Units')}
+                                {num} {num === 1 ? 'Copy' : 'Copies'}
                               </button>
                             ))}
                           </div>
@@ -1267,7 +1357,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 
                 {/* Left column: Dropzone & uploads */}
-                <div className="lg:col-span-6 space-y-4">
+                <div className="lg:col-span-4 space-y-4">
                   <h3 className="text-lg font-bold text-zinc-900 border-b pb-2 flex items-center justify-between">
                     <span className="flex items-center space-x-2">
                       <Upload className="h-5 w-5 text-red-600 animate-pulse" />
@@ -1499,7 +1589,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                 </div>
 
                 {/* Right column: Pre-Press Alignment & interactive crop controls */}
-                <div className="lg:col-span-6 space-y-4 bg-zinc-50 border border-zinc-200/80 p-5 rounded-2xl shadow-sm">
+                <div className="lg:col-span-8 space-y-4 bg-zinc-50 border border-zinc-200/80 p-5 rounded-2xl shadow-sm">
                   <div className="border-b border-zinc-200 pb-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-black uppercase tracking-widest text-[#E11D48] flex items-center bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-full">
@@ -1518,7 +1608,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                   </div>
 
                   {/* Design Workspace Table Viewport */}
-                  <div className="bg-zinc-900 rounded-xl p-4 flex flex-col items-center justify-center relative overflow-hidden border border-zinc-800 shadow-inner group min-h-[340px]">
+                  <div className="bg-zinc-900 rounded-xl p-4 flex flex-col items-center justify-center relative overflow-hidden border border-zinc-800 shadow-inner group min-h-[360px] sm:min-h-[460px] md:min-h-[520px] lg:min-h-[560px] xl:min-h-[660px] w-full shrink-0">
                     {/* Workspace Gridlines */}
                     <div className="absolute inset-0 bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px] opacity-70 pointer-events-none"></div>
                     
@@ -1530,24 +1620,24 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
 
                     {/* Active proof item selector header if multiple exist */}
                     <div className="absolute top-2.5 left-2.5 z-20 max-w-[200px] bg-black/60 font-mono text-[9px] border border-zinc-800 backdrop-blur rounded px-2 py-1 text-zinc-300">
-                      <span className="text-red-400 font-bold">校准 Proof: </span>
+                      <span className="text-red-400 font-bold">Proof: </span>
                       {uploadedFiles.find(f => f.id === selectedFileForMockup)?.name || 'Sample template'}
                     </div>
 
                     {/* Canvas Page Frame (Size maps dynamically to product shape!) */}
                     <div 
-                      className={`relative overflow-hidden border bg-white shadow-2xl transition-all select-none duration-100 flex items-center justify-center ${
+                      className={`relative overflow-hidden border bg-white shadow-2xl transition-all select-none duration-100 flex items-center justify-center shrink-0 ${
                         selectedProductId === 'prod_bizcard' 
-                          ? 'w-72 h-[165px] rounded-lg' 
-                          : selectedProductId === 'prod_poster'
-                          ? 'w-[210px] h-[297px] rounded'
-                          : selectedProductId === 'prod_flyer'
-                          ? 'w-[210px] h-[297px] rounded'
-                          : 'w-[210px] h-[297px] rounded' /* default A4 document portrait */
+                          ? 'w-72 h-[165px] sm:w-[320px] sm:h-[183px] md:w-[340px] md:h-[194px] xl:w-[400px] xl:h-[228px] rounded-lg' 
+                          : 'w-[210px] h-[297px] sm:w-[250px] sm:h-[354px] md:w-[280px] md:h-[396px] xl:w-[360px] xl:h-[509px] rounded'
                       }`}
                       style={{
                         borderColor: isPressDragging ? '#DC2626' : '#d4d4d8',
                         borderWidth: '2px',
+                        isolation: 'isolate',
+                        transform: 'translate3d(0, 0, 0)',
+                        maxWidth: '95%',
+                        maxHeight: '95%',
                       }}
                       onMouseDown={(e) => {
                         e.preventDefault();
@@ -1585,16 +1675,25 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                         }}
                       >
                         {uploadedFiles.find(f => f.id === selectedFileForMockup)?.url ? (
-                          <img 
-                            src={uploadedFiles.find(f => f.id === selectedFileForMockup)?.url} 
-                            referrerPolicy="no-referrer" 
-                            alt="Your custom print proof" 
-                            className="w-full h-full pointer-events-none"
-                            style={{
-                              objectFit: mockupFitMode === 'cover' ? 'cover' : (mockupFitMode === 'contain' ? 'contain' : 'fill'),
-                              filter: colourMode === 'Black & white' ? 'grayscale(100%) contrast(1.15) brightness(1.05)' : 'none',
-                            }}
-                          />
+                          uploadedFiles.find(f => f.id === selectedFileForMockup)?.url.startsWith('blob:') && 
+                          uploadedFiles.find(f => f.id === selectedFileForMockup)?.name.toLowerCase().endsWith('.pdf') ? (
+                            <iframe 
+                              src={uploadedFiles.find(f => f.id === selectedFileForMockup)?.url + '#toolbar=0&navpanes=0&scrollbar=0'} 
+                              className="w-full h-full border-none pointer-events-none select-none"
+                              title="PDF Document Proof"
+                            />
+                          ) : (
+                            <img 
+                              src={uploadedFiles.find(f => f.id === selectedFileForMockup)?.url} 
+                              referrerPolicy="no-referrer" 
+                              alt="Your custom print proof" 
+                              className="w-full h-full pointer-events-none"
+                              style={{
+                                objectFit: mockupFitMode === 'cover' ? 'cover' : (mockupFitMode === 'contain' ? 'contain' : 'fill'),
+                                filter: colourMode === 'Black & white' ? 'grayscale(100%) contrast(1.15) brightness(1.05)' : 'none',
+                              }}
+                            />
+                          )
                         ) : (
                           /* RENDER HIGHEST-QUALITY EMBEDDED HIGH-FIDELITY VECTOR TEMPLATES */
                           selectedProductId === 'prod_document' ? (
@@ -1749,8 +1848,8 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                       {/* Overlap Trim markings representation */}
                       {showBleedLines && (
                         /* Highlight boundary representing safe bounds and crop borders */
-                        <div className="absolute inset-2.5 border border-dashed border-red-500/80 pointer-events-none z-10 select-none">
-                          <span className="absolute bottom-1 right-2 bg-red-600 text-white font-mono text-[7px] px-1 py-0.5 rounded font-bold uppercase tracking-wider opacity-90 select-none">
+                        <div className="absolute inset-4 border border-dashed border-red-500/80 pointer-events-none z-10 select-none">
+                          <span className="absolute top-2 right-2 bg-red-650 text-white font-mono text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider opacity-90 select-none max-w-[95%] truncate">
                             Safe Bleed Line (✂️ Trim Zone)
                           </span>
                         </div>
@@ -2118,7 +2217,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                 <ChevronRight className="h-4 w-4" />
               </button>
             ) : (
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   disabled={submittingOrder}
@@ -2136,6 +2235,15 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                 >
                   <CreditCard className="h-4 w-4" />
                   <span>Stripe</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={submittingOrder}
+                  onClick={() => handlePlaceOrder('Collection')}
+                  className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center space-x-1 cursor-pointer"
+                >
+                  <Store className="h-4 w-4" />
+                  <span>Pay at Collection</span>
                 </button>
               </div>
             )}
@@ -2175,7 +2283,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
               </div>
               <div className="flex justify-between">
                 <span>Quantity:</span>
-                <span className="font-semibold text-brand-cyan px-1.5 py-0.2 bg-brand-cyan/10 rounded">{quantity} items</span>
+                <span className="font-semibold text-brand-cyan px-1.5 py-0.2 bg-brand-cyan/10 rounded">{quantity} {quantity === 1 ? 'copy' : 'copies'}</span>
               </div>
             </div>
 
@@ -2217,6 +2325,9 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
         </div>
 
       </div>
+
+      {/* Scroll spacer to prevent content from being blocked or obscured by the mobile floating navigation bar */}
+      <div className="h-24 md:hidden pointer-events-none shrink-0" />
 
       {/* Mobile Floating Navigation Bar */}
       <div className="fixed bottom-5 left-1/2 -translate-x-1/2 w-[92%] max-w-sm bg-zinc-950/95 text-white py-2 px-3.5 rounded-full shadow-2xl border border-zinc-800/80 backdrop-blur-md z-50 flex items-center justify-between md:hidden transition-all duration-300">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -6,7 +6,7 @@ import {
   GoogleAuthProvider 
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { auth, db, cleanUndefined } from '../firebase';
 import { UserProfile, UserRole } from '../types';
 import { Mail, Lock, User, Terminal, Loader2, Landmark, Check, AlertCircle } from 'lucide-react';
 
@@ -24,9 +24,39 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
   const [vatNumber, setVatNumber] = useState('');
   const [isStaffRole, setIsStaffRole] = useState(false); // Demo Helper
   
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [hasAdminPasswordSet, setHasAdminPasswordSet] = useState<boolean | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // SHA-256 secure hashing function
+  const sha256 = async (message: string): Promise<string> => {
+    const msgBuffer = new TextEncoder().encode(message);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  // Fetch admin password setup state on mount
+  useEffect(() => {
+    const fetchAdminSettings = async () => {
+      try {
+        const docRef = doc(db, 'config', 'admin_settings');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists() && docSnap.data().adminPasswordHash) {
+          setHasAdminPasswordSet(true);
+        } else {
+          setHasAdminPasswordSet(false);
+        }
+      } catch (err) {
+        console.error('Error loading admin settings:', err);
+        setHasAdminPasswordSet(false);
+      }
+    };
+    fetchAdminSettings();
+  }, []);
 
   // Set up high-contrast premium demo logins for testing
   const handleQuickDemoLogin = async (role: UserRole) => {
@@ -43,6 +73,9 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
       try {
         credentials = await signInWithEmailAndPassword(auth, demoEmail, demoPassword);
       } catch (signinErr: any) {
+        if (signinErr.code === 'auth/operation-not-allowed') {
+          throw signinErr;
+        }
         if (signinErr.code === 'auth/user-not-found' || signinErr.code === 'auth/invalid-credential') {
           // If demo user doesn't exist yet, register them
           credentials = await createUserWithEmailAndPassword(auth, demoEmail, demoPassword);
@@ -69,20 +102,48 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
           vatNumber: role === 'customer' ? 'ZA123456789' : undefined,
           tags: role === 'customer' ? ['VIP'] : ['Print Operator']
         };
-        await setDoc(userRef, profile);
+        await setDoc(userRef, cleanUndefined(profile));
       } else {
         profile = userSnap.data() as UserProfile;
         // Safety lock: ensure role matches demo click
         if (profile.role !== role) {
           profile.role = role;
-          await setDoc(userRef, { ...profile, role }, { merge: true });
+          await setDoc(userRef, cleanUndefined({ ...profile, role }), { merge: true });
         }
       }
 
       onAuthSuccess(profile);
     } catch (err: any) {
       console.error('Demo login error:', err);
-      setError(err.message || 'Verification failure under demo login simulation');
+      if (err.code === 'auth/operation-not-allowed') {
+        // Trigger Seamless Local Sandbox Auth Bypass!
+        const localUid = 'local_' + role + '_' + Math.random().toString(36).substring(2, 11);
+        const profile: UserProfile = {
+          id: localUid,
+          email: demoEmail,
+          role: role,
+          createdAt: new Date(),
+          name: name,
+          company: companyName,
+          phone: '+27 82 123 4567',
+          vatNumber: role === 'customer' ? 'ZA123456789' : undefined,
+          tags: role === 'customer' ? ['VIP', 'LocalSandbox'] : ['Print Operator', 'LocalSandbox']
+        };
+        
+        localStorage.setItem('local_sandbox_user', JSON.stringify(profile));
+        try {
+          await setDoc(doc(db, 'users', localUid), cleanUndefined(profile));
+        } catch (dbErr) {
+          console.warn('Failed to register local user in Firestore, continuing offline:', dbErr);
+        }
+        
+        setSuccess('Sandbox mode activated! Email/Password is disabled in your Firebase console, so we have automatically logged you in with a local simulated session.');
+        setTimeout(() => {
+          onAuthSuccess(profile);
+        }, 1500);
+      } else {
+        setError(err.message || 'Verification failure under demo login simulation');
+      }
     } finally {
       setLoading(false);
     }
@@ -94,9 +155,21 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
       setError('Please provide email and password');
       return;
     }
+    const emailTrimmed = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailTrimmed)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
     if (!isLogin && !fullName) {
       setError('Please provide your full name');
       return;
+    }
+    if (!isLogin && isStaffRole) {
+      if (!adminPasswordInput) {
+        setError('Please enter the Administrative Password to authorize staff registration.');
+        return;
+      }
     }
 
     setLoading(true);
@@ -106,7 +179,15 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
     try {
       if (isLogin) {
         // Authenticate user
-        const credentials = await signInWithEmailAndPassword(auth, email, password);
+        let credentials;
+        try {
+          credentials = await signInWithEmailAndPassword(auth, email, password);
+        } catch (signinErr: any) {
+          if (signinErr.code === 'auth/operation-not-allowed') {
+            throw signinErr;
+          }
+          throw signinErr;
+        }
         const uid = credentials.user.uid;
         
         // Fetch profile
@@ -124,12 +205,43 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
             createdAt: new Date(),
             name: email.split('@')[0],
           };
-          await setDoc(userRef, fallbackProfile);
+          await setDoc(userRef, cleanUndefined(fallbackProfile));
           onAuthSuccess(fallbackProfile);
         }
       } else {
+        // Admin password validation / configuration
+        if (isStaffRole) {
+          const configRef = doc(db, 'config', 'admin_settings');
+          const configSnap = await getDoc(configRef);
+          const inputHash = await sha256(adminPasswordInput);
+
+          if (configSnap.exists() && configSnap.data().adminPasswordHash) {
+            // Verify existing
+            if (configSnap.data().adminPasswordHash !== inputHash) {
+              setError('Invalid Administrative Authorization Password. Staff registration denied.');
+              setLoading(false);
+              return;
+            }
+          } else {
+            // Setup the admin password for the first time
+            await setDoc(configRef, cleanUndefined({
+              adminPasswordHash: inputHash,
+              updatedAt: new Date()
+            }));
+            setHasAdminPasswordSet(true);
+          }
+        }
+
         // Create account
-        const credentials = await createUserWithEmailAndPassword(auth, email, password);
+        let credentials;
+        try {
+          credentials = await createUserWithEmailAndPassword(auth, email, password);
+        } catch (signupErr: any) {
+          if (signupErr.code === 'auth/operation-not-allowed') {
+            throw signupErr;
+          }
+          throw signupErr;
+        }
         const uid = credentials.user.uid;
         
         const newProfile: UserProfile = {
@@ -145,7 +257,7 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
         };
 
         // Write directly to Firestore using our strict blueprint guidelines
-        await setDoc(doc(db, 'users', uid), newProfile);
+        await setDoc(doc(db, 'users', uid), cleanUndefined(newProfile));
         setSuccess('Account created successfully! Auto-launching...');
         setTimeout(() => {
           onAuthSuccess(newProfile);
@@ -153,15 +265,44 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
       }
     } catch (err: any) {
       console.error('Email password submit error:', err);
-      let errMsg = err.message || 'Authentication error';
-      if (err.code === 'auth/email-already-in-use') {
-        errMsg = 'This email address is already registered.';
-      } else if (err.code === 'auth/weak-password') {
-        errMsg = 'The password is too weak. Must be at least 6 characters.';
-      } else if (err.code === 'auth/invalid-credential') {
-        errMsg = 'Invalid email or password combination.';
+      if (err.code === 'auth/operation-not-allowed') {
+        const localUid = 'local_' + (isStaffRole ? 'staff' : 'customer') + '_' + Math.random().toString(36).substring(2, 11);
+        const newProfile: UserProfile = {
+          id: localUid,
+          email: email,
+          role: isStaffRole ? 'staff' : 'customer',
+          createdAt: new Date(),
+          name: isLogin ? email.split('@')[0] : fullName,
+          company: company || undefined,
+          phone: phone || undefined,
+          vatNumber: vatNumber || undefined,
+          tags: isStaffRole ? ['Print Operator', 'LocalSandbox'] : ['Standard Customer', 'LocalSandbox']
+        };
+
+        localStorage.setItem('local_sandbox_user', JSON.stringify(newProfile));
+        try {
+          await setDoc(doc(db, 'users', localUid), cleanUndefined(newProfile));
+        } catch (dbErr) {
+          console.warn('Failed to register local user in Firestore, continuing offline:', dbErr);
+        }
+
+        setSuccess('Sandbox mode activated! Email/Password is disabled in your Firebase console, so we have automatically logged you in with a local simulated session.');
+        setTimeout(() => {
+          onAuthSuccess(newProfile);
+        }, 1500);
+      } else {
+        let errMsg = err.message || 'Authentication error';
+        if (err.code === 'auth/email-already-in-use') {
+          errMsg = 'This email address is already registered.';
+        } else if (err.code === 'auth/weak-password') {
+          errMsg = 'The password is too weak. Must be at least 6 characters.';
+        } else if (err.code === 'auth/invalid-credential') {
+          errMsg = 'Invalid email or password combination.';
+        } else if (err.code === 'auth/invalid-email') {
+          errMsg = 'Please enter a valid email address.';
+        }
+        setError(errMsg);
       }
-      setError(errMsg);
     } finally {
       setLoading(false);
     }
@@ -187,7 +328,7 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
           name: credentials.user.displayName || credentials.user.email?.split('@')[0] || 'User',
           phone: credentials.user.phoneNumber || undefined,
         };
-        await setDoc(userRef, profile);
+        await setDoc(userRef, cleanUndefined(profile));
       } else {
         profile = userSnap.data() as UserProfile;
       }
@@ -323,17 +464,46 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
               </div>
 
               {/* Staff Signup Admin Bypass for ease of demonstration */}
-              <div className="flex items-center space-x-2 pt-2 pb-1 bg-slate-50 p-2 rounded border border-dashed border-slate-200">
-                <input
-                  type="checkbox"
-                  id="staff-check"
-                  checked={isStaffRole}
-                  onChange={(e) => setIsStaffRole(e.target.checked)}
-                  className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue"
-                />
-                <label htmlFor="staff-check" className="text-xs text-brand-blue font-bold cursor-pointer">
-                  Register as Staff / Print Operator Account
-                </label>
+              <div className="flex flex-col space-y-2 pt-2 pb-1 bg-slate-50 p-2 rounded border border-dashed border-slate-200">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="staff-check"
+                    checked={isStaffRole}
+                    onChange={(e) => setIsStaffRole(e.target.checked)}
+                    className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue"
+                  />
+                  <label htmlFor="staff-check" className="text-xs text-brand-blue font-bold cursor-pointer">
+                    Register as Staff / Print Operator Account
+                  </label>
+                </div>
+
+                {isStaffRole && (
+                  <div className="pt-2 border-t border-slate-200 mt-1 space-y-1">
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-red-600">
+                      {hasAdminPasswordSet === false
+                        ? 'Define System Admin Password (One-Time Setup)'
+                        : 'System Admin Authorization Password'}
+                    </label>
+                    <p className="text-[10px] text-zinc-500 leading-tight">
+                      {hasAdminPasswordSet === false
+                        ? 'No administrative password is set in the database yet. Define it now to initialize the system password.'
+                        : 'Enter the admin password to authorize your staff profile creation.'}
+                    </p>
+                    <div className="relative mt-1">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-zinc-400">
+                        <Lock className="h-3.5 w-3.5 text-red-500" />
+                      </span>
+                      <input
+                        type="password"
+                        required
+                        value={adminPasswordInput}
+                        onChange={(e) => setAdminPasswordInput(e.target.value)}
+                        className="pl-9 pr-3 py-1.5 w-full bg-white border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500 text-brand-dark"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -371,7 +541,6 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-9 pr-3 py-2 w-full bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-cyan focus:bg-white text-brand-dark"
-                placeholder="••••••••"
               />
             </div>
           </div>

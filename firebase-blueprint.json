@@ -113,6 +113,16 @@
         "sentAt": { "type": "string", "format": "date-time", "description": "Delivery timestamp" }
       },
       "required": ["id", "userId", "orderId", "channel", "content", "sentAt"]
+    },
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Global administration settings and credentials",
+      "type": "object",
+      "properties": {
+        "adminPasswordHash": { "type": "string", "description": "SHA-256 hash of the administrative verification password" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last time settings were changed" }
+      },
+      "required": ["adminPasswordHash"]
     }
   },
   "firestore": {
@@ -143,6 +153,10 @@
     "/notifications/{notificationId}": {
       "schema": "Notification",
       "description": "System output logs for dispatching customer notices"
+    },
+    "/config/{docId}": {
+      "schema": "SystemConfig",
+      "description": "Collection of global system configurations and settings"
     }
   }
 }

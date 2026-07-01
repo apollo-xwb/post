@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType, cleanUndefined } from '../firebase';
 import { 
   collection, 
   onSnapshot, 
@@ -31,6 +31,266 @@ import {
   Send,
   Info
 } from 'lucide-react';
+
+const handleDirectPrint = (order: Order, files: OrderFile[]) => {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Please allow popups to print directly.');
+    return;
+  }
+  
+  const filesHtml = files.map(f => `<li>${f.fileName} (${(f.fileSize / (1024*1024)).toFixed(2)} MB)</li>`).join('') || '<li>No source files uploaded</li>';
+  
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>LUTHO OS - PRINT TICKET #${order.id}</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: #111827;
+            padding: 30px;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.5;
+          }
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #111827;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+          }
+          .brand {
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            color: #ef4444;
+            text-transform: uppercase;
+          }
+          .subbrand {
+            font-size: 10px;
+            color: #6b7280;
+            font-weight: bold;
+            margin-top: 1px;
+            letter-spacing: 0.05em;
+          }
+          .ticket-title {
+            font-size: 22px;
+            font-weight: 800;
+            text-align: right;
+            margin: 0;
+            color: #111827;
+            letter-spacing: -0.03em;
+          }
+          .order-id {
+            font-family: monospace;
+            font-size: 16px;
+            color: #4b5563;
+            font-weight: bold;
+          }
+          .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 25px;
+          }
+          .section-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #6b7280;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 4px;
+            margin-bottom: 10px;
+            font-weight: 800;
+          }
+          .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 13px;
+          }
+          .info-label {
+            color: #4b5563;
+          }
+          .info-value {
+            font-weight: 700;
+            color: #111827;
+          }
+          .specs-card {
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 25px;
+          }
+          .specs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+          }
+          .spec-item {
+            border-bottom: 1px dashed #e5e7eb;
+            padding-bottom: 6px;
+          }
+          .spec-label {
+            font-size: 10px;
+            color: #6b7280;
+            text-transform: uppercase;
+            font-weight: bold;
+          }
+          .spec-value {
+            font-size: 13px;
+            font-weight: 800;
+            color: #111827;
+            margin-top: 1px;
+          }
+          .file-list {
+            margin-top: 8px;
+            padding-left: 20px;
+            font-size: 12px;
+            color: #374151;
+          }
+          .footer {
+            margin-top: 40px;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 12px;
+            font-size: 10px;
+            color: #9ca3af;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          @media print {
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="brand">Lutho OS</div>
+            <div class="subbrand">POWERED BY LUTHO OS</div>
+          </div>
+          <div>
+            <h1 class="ticket-title">PRINT JOB TICKET</h1>
+            <div class="order-id" style="text-align: right;">ID: #${order.id}</div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div>
+            <div class="section-title">Customer Details</div>
+            <div class="info-row">
+              <span class="info-label">Name:</span>
+              <span class="info-value">${order.customerName}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Email:</span>
+              <span class="info-value">${order.customerEmail}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Fulfillment:</span>
+              <span class="info-value">${order.collectionMethod}</span>
+            </div>
+          </div>
+          <div>
+            <div class="section-title">Order Info</div>
+            <div class="info-row">
+              <span class="info-label">Product Type:</span>
+              <span class="info-value">${order.productType}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Turnaround:</span>
+              <span class="info-value">${order.turnaround}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Payment Status:</span>
+              <span class="info-value" style="text-transform: uppercase; color: ${order.paymentStatus === 'paid' ? '#10b981' : '#f59e0b'};">
+                ${order.paymentStatus} (${order.paymentMethod || 'None'})
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Job Print Specifications</div>
+        <div class="specs-card">
+          <div class="specs-grid">
+            <div class="spec-item">
+              <div class="spec-label">Paper Size</div>
+              <div class="spec-value">${order.specs?.paperSize || 'N/A'}</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Paper Stock</div>
+              <div class="spec-value">${order.specs?.paperStock || 'N/A'}</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Coat & Finish</div>
+              <div class="spec-value">${order.specs?.finish || 'N/A'}</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Duplex Sides</div>
+              <div class="spec-value">${order.specs?.printSides || 'N/A'}</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Colour Mode</div>
+              <div class="spec-value" style="color: ${order.specs?.colourMode?.toLowerCase().includes('colour') ? '#ef4444' : '#111827'};">
+                ${order.specs?.colourMode || 'N/A'}
+              </div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-label">Quantity</div>
+              <div class="spec-value" style="font-size: 15px; color: #ef4444;">
+                ${order.quantity} ${order.quantity === 1 ? 'copy' : 'copies'}
+              </div>
+            </div>
+          </div>
+          
+          ${order.specs?.alignmentScale ? `
+            <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid #e5e7eb; display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px; font-size: 11px;">
+              <div>
+                <span style="color: #6b7280; font-weight: bold; text-transform: uppercase; display: block; font-size: 9px;">Artwork Alignment Scale</span>
+                <span style="font-weight: 800; color: #111827;">${order.specs.alignmentScale}</span>
+              </div>
+              <div>
+                <span style="color: #6b7280; font-weight: bold; text-transform: uppercase; display: block; font-size: 9px;">Rotation & Positioning Offsets</span>
+                <span style="font-weight: 800; color: #111827;">${order.specs.alignmentRotation || '0°'} | ${order.specs.alignmentOffset || 'None'} (${order.specs.alignmentFitMode || 'Cover'})</span>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="section-title">Files to Print</div>
+        <ul class="file-list">
+          ${filesHtml}
+        </ul>
+
+        ${order.specialInstructions ? `
+          <div style="margin-top: 20px;">
+            <div class="section-title">Customer Special Instructions</div>
+            <div style="padding: 10px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px; font-size: 12px; color: #78350f; font-weight: 500;">
+              ${order.specialInstructions}
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="footer">
+          <span>Printed on: ${new Date().toLocaleString()}</span>
+          <span>Powered by Lutho OS • Professional Print Infrastructure</span>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          }
+        </script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+};
 
 interface StaffDashboardProps {
   user: UserProfile;
@@ -186,10 +446,10 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
       const orderRef = doc(db, 'orders', orderId);
       
       // Update order status field & staff note
-      await updateDoc(orderRef, {
+      await updateDoc(orderRef, cleanUndefined({
         status: newStatus as any,
         staffNote: staffPrivateNote
-      });
+      }));
 
       // Write status history subcollection record for audit integrity
       const auditRefId = 'audit_' + Math.random().toString(36).substr(2, 9);
@@ -203,7 +463,7 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
         note: logNote || `Job status updated: ${targetOrder.status} → ${newStatus}.`,
         timestamp: new Date()
       };
-      await setDoc(doc(db, 'orders', orderId, 'status_history', auditRefId), auditObj);
+      await setDoc(doc(db, 'orders', orderId, 'status_history', auditRefId), cleanUndefined(auditObj));
 
       // Save notification log record to satisfy PRD
       const notificationId = 'notif_' + Math.random().toString(36).substr(2, 9);
@@ -215,7 +475,7 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
         content: `Postnet system automatic alert: Your order ${orderId} has transitioned to: ${newStatus}`,
         sentAt: new Date()
       };
-      await setDoc(doc(db, 'notifications', notificationId), emailRecord);
+      await setDoc(doc(db, 'notifications', notificationId), cleanUndefined(emailRecord));
 
       setSuccessMsg(`Status for order ${orderId} successfully shifted to ${newStatus}`);
       setNewLogNote('');
@@ -239,7 +499,7 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
         if (!orderToChange) continue;
 
         const orderRef = doc(db, 'orders', id);
-        await updateDoc(orderRef, { status: bulkStatus as any });
+        await updateDoc(orderRef, cleanUndefined({ status: bulkStatus as any }));
 
         const auditId = 'audit_' + Math.random().toString(36).substr(2, 9);
         const auditRecord = {
@@ -252,7 +512,7 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
           note: `Mass status shift batch operation.`,
           timestamp: new Date()
         };
-        await setDoc(doc(db, 'orders', id, 'status_history', auditId), auditRecord);
+        await setDoc(doc(db, 'orders', id, 'status_history', auditId), cleanUndefined(auditRecord));
       }
 
       setSuccessMsg(`Bulk operation succeeded! ${selectedOrderIds.length} orders updated to ${bulkStatus}.`);
@@ -270,7 +530,7 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
   const handleUpdateBasePrice = async (prodId: string) => {
     try {
       const docRef = doc(db, 'products', prodId);
-      await updateDoc(docRef, { basePrice: Number(editingBasePrice) });
+      await updateDoc(docRef, cleanUndefined({ basePrice: Number(editingBasePrice) }));
       setEditingProductId(null);
       setSuccessMsg('Base product price adjusted successfully');
     } catch (err) {
@@ -282,7 +542,7 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
   const handleUpdateMultiplierRule = async (ruleId: string) => {
     try {
       const docRef = doc(db, 'pricing_rules', ruleId);
-      await updateDoc(docRef, { multiplier: Number(editingMultiplier) });
+      await updateDoc(docRef, cleanUndefined({ multiplier: Number(editingMultiplier) }));
       setEditingRuleId(null);
       setSuccessMsg('Multiplier rules adjusted successfully.');
     } catch (err) {
@@ -697,6 +957,75 @@ export default function StaffDashboard({ user, activeView }: StaffDashboardProps
                           <span className="text-[9px] uppercase font-bold bg-amber-500/20 text-amber-800 px-1.5 py-0.2 rounded">
                             {userProfile?.tags?.[0] || 'Standard'}
                           </span>
+                        </div>
+                      </div>
+
+                      {/* Job specifications retaining all config details */}
+                      <div className="bg-zinc-900 text-zinc-100 rounded-xl p-4 text-xs space-y-3 border border-zinc-800 shadow-lg">
+                        <p className="font-extrabold text-red-500 uppercase tracking-wider text-[10px] flex items-center">
+                          <Printer className="h-3.5 w-3.5 mr-1 text-red-500 animate-pulse" />
+                          <span>Job Print Specifications</span>
+                        </p>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[11px]">
+                          <div className="border-b border-zinc-800/80 pb-1">
+                            <span className="text-zinc-500 block text-[9px] uppercase font-bold">Paper Size:</span>
+                            <span className="font-bold text-white">{o.specs?.paperSize || 'N/A'}</span>
+                          </div>
+                          <div className="border-b border-zinc-800/80 pb-1">
+                            <span className="text-zinc-500 block text-[9px] uppercase font-bold">Paper Stock:</span>
+                            <span className="font-bold text-white">{o.specs?.paperStock || 'N/A'}</span>
+                          </div>
+                          <div className="border-b border-zinc-800/80 pb-1">
+                            <span className="text-zinc-500 block text-[9px] uppercase font-bold">Coat & Finish:</span>
+                            <span className="font-bold text-white">{o.specs?.finish || 'N/A'}</span>
+                          </div>
+                          <div className="border-b border-zinc-800/80 pb-1">
+                            <span className="text-zinc-500 block text-[9px] uppercase font-bold">Duplex Sides:</span>
+                            <span className="font-bold text-yellow-500">{o.specs?.printSides || 'N/A'}</span>
+                          </div>
+                          <div className="border-b border-zinc-800/80 pb-1">
+                            <span className="text-zinc-500 block text-[9px] uppercase font-bold">Colour Mode:</span>
+                            <span className={`font-bold ${o.specs?.colourMode?.toLowerCase().includes('colour') ? 'text-red-400' : 'text-zinc-400'}`}>
+                              {o.specs?.colourMode || 'N/A'}
+                            </span>
+                          </div>
+                          <div className="border-b border-zinc-800/80 pb-1">
+                            <span className="text-zinc-500 block text-[9px] uppercase font-bold">Quantity:</span>
+                            <span className="font-bold text-emerald-450">{o.quantity} {o.quantity === 1 ? 'copy' : 'copies'}</span>
+                          </div>
+                        </div>
+
+                        {o.specs?.alignmentScale && (
+                          <div className="pt-2 border-t border-zinc-850 text-[10px] space-y-1 bg-zinc-950/40 p-2 rounded">
+                            <span className="text-zinc-500 block text-[9px] uppercase font-bold font-mono">Alignment & Scaling:</span>
+                            <div className="text-zinc-300 font-mono flex flex-wrap gap-x-2">
+                              <span>Scale: <strong>{o.specs.alignmentScale}</strong></span>
+                              <span>Rot: <strong>{o.specs.alignmentRotation || '0°'}</strong></span>
+                              <span>Fit: <strong>{o.specs.alignmentFitMode || 'Cover'}</strong></span>
+                            </div>
+                            <div className="text-zinc-400 font-mono text-[9px] truncate">
+                              Offset: <strong>{o.specs.alignmentOffset || 'None'}</strong>
+                            </div>
+                          </div>
+                        )}
+
+                        {o.specialInstructions && (
+                          <div className="bg-amber-950/40 border border-amber-900/50 p-2 rounded-lg text-[10px]">
+                            <span className="text-amber-500 font-bold block mb-0.5 font-mono uppercase text-[9px]">Customer Note:</span>
+                            <p className="text-amber-200 leading-normal">{o.specialInstructions}</p>
+                          </div>
+                        )}
+
+                        {/* Direct Print Button Action inside Staff view */}
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleDirectPrint(o, inspectOrderFiles)}
+                            className="w-full py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black rounded-lg text-xs tracking-wide uppercase shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer hover:shadow-red-900/30 hover:-translate-y-0.5 active:translate-y-0 duration-150"
+                          >
+                            <Printer className="h-4 w-4 text-white" />
+                            <span>Direct Print Job Ticket</span>
+                          </button>
                         </div>
                       </div>
 

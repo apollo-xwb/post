@@ -31,6 +31,9 @@ export default function Navbar({ user, onLogout, activeTab, setActiveTab, onAuth
             <span className="font-extrabold tracking-widest text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-mono">
               PRINT OS
             </span>
+            <div className="text-[9px] font-black tracking-wider text-red-500/90 mt-0.5 uppercase">
+              powered by lutho os
+            </div>
           </div>
         </div>
 
