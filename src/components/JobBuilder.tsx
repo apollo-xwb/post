@@ -99,6 +99,17 @@ interface JobBuilderProps {
   onOrderCreated: (orderId: string) => void;
 }
 
+const SIZE_LABELS: Record<string, string> = {
+  'A0': 'A0 Giant (841 x 1189 mm)',
+  'A1': 'A1 Graphic (594 x 841 mm)',
+  'A2': 'A2 Poster (420 x 594 mm)',
+  'A3': 'A3 Medium (297 x 420 mm)',
+  'A4': 'A4 Standard (210 x 297 mm)',
+  'A5': 'A5 Compact (148 x 210 mm)',
+  'A6': 'A6 Pocket (105 x 148 mm)',
+  'custom': 'Custom Dimensions (MM)'
+};
+
 const SHORTCUT_PRESETS = [
   {
     id: 'bank-statement',
@@ -122,19 +133,6 @@ const SHORTCUT_PRESETS = [
     quantity: 100,
     paperStock: '120gsm',
     finish: 'Gloss laminate',
-    printSides: 'Double sided',
-    colourMode: 'Full colour (CMYK)',
-    turnaround: 'Standard (3–5 days)'
-  },
-  {
-    id: 'premium-cards',
-    label: '📇 Premium Business Cards',
-    description: '250x Professional Cards, Matte Luxe Double-sided',
-    productId: 'prod_bizcard',
-    paperSize: 'A6',
-    quantity: 250,
-    paperStock: '350gsm',
-    finish: 'Matt laminate',
     printSides: 'Double sided',
     colourMode: 'Full colour (CMYK)',
     turnaround: 'Standard (3–5 days)'
@@ -260,6 +258,8 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
   const [guestPassword, setGuestPassword] = useState('');
   const [isGuestSignUp, setIsGuestSignUp] = useState(true);
 
+  const selectedProduct = products.find(p => p.id === selectedProductId) || products[0];
+
   // Update billing details when user profile updates/loads
   useEffect(() => {
     if (user) {
@@ -334,9 +334,16 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
               }
             }
           }
-          setProducts(prodsArr.filter(p => p.active));
+          // Enforce poster sizes
+          prodsArr = prodsArr.map(p => {
+            if (p.id === 'prod_poster') {
+              return { ...p, config: { ...p.config, sizes: ['A2', 'A1', 'A0'] } };
+            }
+            return p;
+          });
+          setProducts(prodsArr.filter(p => p.active && p.id !== 'prod_bizcard'));
         } else {
-          setProducts(DEFAULT_PRODUCTS.slice());
+          setProducts(DEFAULT_PRODUCTS.filter(p => p.id !== 'prod_bizcard'));
         }
         if (!ruleSnap.empty) {
           const rulesArr = ruleSnap.docs.map(d => d.data() as any);
@@ -350,6 +357,13 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
     }
     loadCatalog();
   }, []);
+
+  // Ensure Posters never have double sided selected
+  useEffect(() => {
+    if (selectedProductId === 'prod_poster' && printSides === 'Double sided') {
+      setPrintSides('Single sided');
+    }
+  }, [selectedProductId, printSides]);
 
   // Recalculate quotation as specs change
   useEffect(() => {
@@ -905,7 +919,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                         <p className="text-xs text-zinc-500 mt-1">Select the option that best matches your project.</p>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         <button
                           type="button"
                           onClick={() => {
@@ -918,36 +932,13 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                             setQuantity(1);
                             setOnboardStep(2);
                           }}
-                          className="p-3 text-left bg-white border border-zinc-200 hover:border-red-500 hover:ring-1 hover:ring-red-300 rounded-xl transition-all cursor-pointer hover:bg-rose-50/20 group"
+                          className="p-3 text-left bg-white border border-zinc-200 hover:border-red-500 hover:ring-1 hover:ring-red-300 rounded-xl transition-all cursor-pointer hover:bg-rose-50/20 group animate-fade-in"
                         >
                           <div className="flex items-center space-x-3">
                             <span className="text-2xl pt-1">📄</span>
                             <div>
                               <h4 className="font-extrabold text-xs text-zinc-900 group-hover:text-red-600">Quick Document Print</h4>
                               <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">PDFs, contracts, essays, statement sheets, tax slips, slips or guides</p>
-                            </div>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedProductId('prod_bizcard');
-                            setPaperSize('A6');
-                            setPaperStock('350gsm');
-                            setFinish('Matt laminate');
-                            setPrintSides('Double sided');
-                            setColourMode('Full colour (CMYK)');
-                            setQuantity(100);
-                            setOnboardStep(2);
-                          }}
-                          className="p-3 text-left bg-white border border-zinc-200 hover:border-red-500 hover:ring-1 hover:ring-red-300 rounded-xl transition-all cursor-pointer hover:bg-rose-50/20 group"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <span className="text-2xl pt-1">📇</span>
-                            <div>
-                              <h4 className="font-extrabold text-xs text-zinc-900 group-hover:text-red-600">Business Cards</h4>
-                              <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">Premium quality double-sided contact cards with protective lamination</p>
                             </div>
                           </div>
                         </button>
@@ -964,7 +955,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                             setQuantity(100);
                             setOnboardStep(2);
                           }}
-                          className="p-3 text-left bg-white border border-zinc-200 hover:border-red-500 hover:ring-1 hover:ring-red-300 rounded-xl transition-all cursor-pointer hover:bg-rose-50/20 group"
+                          className="p-3 text-left bg-white border border-zinc-200 hover:border-red-500 hover:ring-1 hover:ring-red-300 rounded-xl transition-all cursor-pointer hover:bg-rose-50/20 group animate-fade-in"
                         >
                           <div className="flex items-center space-x-3">
                             <span className="text-2xl pt-1">📢</span>
@@ -987,7 +978,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                             setQuantity(1);
                             setOnboardStep(2);
                           }}
-                          className="p-3 text-left bg-white border border-zinc-200 hover:border-red-500 hover:ring-1 hover:ring-red-300 rounded-xl transition-all cursor-pointer hover:bg-rose-50/20 group"
+                          className="p-3 text-left bg-white border border-zinc-200 hover:border-red-500 hover:ring-1 hover:ring-red-300 rounded-xl transition-all cursor-pointer hover:bg-rose-50/20 group animate-fade-in"
                         >
                           <div className="flex items-center space-x-3">
                             <span className="text-2xl pt-1">🖼️</span>
@@ -1081,16 +1072,25 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
 
                         <button
                           type="button"
+                          disabled={selectedProductId === 'prod_poster'}
                           onClick={() => {
                             setPrintSides('Double sided');
                             setOnboardStep(4);
                           }}
-                          className="p-4 text-left bg-white border border-zinc-200 hover:border-red-500 rounded-xl transition-all cursor-pointer hover:bg-zinc-50 flex items-start space-x-3 group"
+                          className={`p-4 text-left bg-white border rounded-xl transition-all flex items-start space-x-3 group ${
+                            selectedProductId === 'prod_poster'
+                              ? 'opacity-40 cursor-not-allowed border-zinc-200 bg-zinc-50'
+                              : 'border-zinc-200 hover:border-red-500 cursor-pointer hover:bg-zinc-50'
+                          }`}
                         >
                           <span className="text-xl pt-0.5">📖</span>
                           <div>
                             <h4 className="font-extrabold text-xs text-zinc-900 group-hover:text-red-600">Double Sided</h4>
-                            <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">Duplex printing. Best for multi-page documents, flyers, and pamphlets to save weight.</p>
+                            <p className="text-[10px] text-zinc-500 mt-0.5 leading-relaxed">
+                              {selectedProductId === 'prod_poster'
+                                ? 'Double sided printing is not offered for posters.'
+                                : 'Duplex printing. Best for multi-page documents, flyers, and pamphlets to save weight.'}
+                            </p>
                           </div>
                         </button>
                       </div>
@@ -1287,13 +1287,27 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                         onChange={(e) => setPaperSize(e.target.value)}
                         className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-brand-dark cursor-pointer font-medium"
                       >
-                        <option value="A4">A4 (210 x 297 mm)</option>
-                        <option value="A3">A3 (297 x 420 mm)</option>
-                        <option value="A5">A5 (148 x 210 mm)</option>
-                        <option value="A6">A6 (105 x 148 mm)</option>
-                        <option value="A1">A1 Graphic (594 x 841 mm)</option>
-                        <option value="A2">A2 Poster (420 x 594 mm)</option>
-                        <option value="custom">Custom Dimensions (MM)</option>
+                        {selectedProduct && selectedProduct.config && selectedProduct.config.sizes ? (
+                          <>
+                            {selectedProduct.config.sizes.map(size => (
+                              <option key={size} value={size}>
+                                {SIZE_LABELS[size] || size}
+                              </option>
+                            ))}
+                            <option value="custom">Custom Dimensions (MM)</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="A4">A4 (210 x 297 mm)</option>
+                            <option value="A3">A3 (297 x 420 mm)</option>
+                            <option value="A5">A5 (148 x 210 mm)</option>
+                            <option value="A6">A6 (105 x 148 mm)</option>
+                            <option value="A1">A1 Graphic (594 x 841 mm)</option>
+                            <option value="A2">A2 Poster (420 x 594 mm)</option>
+                            <option value="A0">A0 Giant (841 x 1189 mm)</option>
+                            <option value="custom">Custom Dimensions (MM)</option>
+                          </>
+                        )}
                       </select>
                     </div>
 
@@ -1359,7 +1373,7 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                         <option value="150gsm">150gsm (Luxury Flyer)</option>
                         <option value="170gsm">170gsm (Graphic Posters)</option>
                         <option value="250gsm">250gsm (Semi-cardstock)</option>
-                        <option value="300gsm">300gsm (Business Cards)</option>
+                        <option value="300gsm">300gsm (Heavy Cardstock)</option>
                         <option value="350gsm">350gsm (Premium Dense)</option>
                       </select>
                     </div>
@@ -1388,20 +1402,27 @@ export default function JobBuilder({ user, onOrderCreated }: JobBuilderProps) {
                         Sides
                       </label>
                       <div className="flex space-x-2 mt-1">
-                        {['Single sided', 'Double sided'].map(s => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => setPrintSides(s)}
-                            className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
-                              printSides === s 
-                                ? 'bg-[#E11D48] text-white border-red-650 font-bold' 
-                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                            }`}
-                          >
-                            {s}
-                          </button>
-                        ))}
+                        {['Single sided', 'Double sided'].map(s => {
+                          const isDisabled = s === 'Double sided' && selectedProductId === 'prod_poster';
+                          return (
+                            <button
+                              key={s}
+                              type="button"
+                              disabled={isDisabled}
+                              onClick={() => setPrintSides(s)}
+                              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                                isDisabled
+                                  ? 'opacity-40 cursor-not-allowed bg-zinc-100 text-zinc-400 border-zinc-200'
+                                  : printSides === s 
+                                  ? 'bg-[#E11D48] text-white border-red-650 font-bold' 
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 cursor-pointer'
+                              }`}
+                              title={isDisabled ? 'Double sided printing is not available for posters.' : undefined}
+                            >
+                              {s}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 

@@ -4,11 +4,10 @@ import { Product, PricingRule } from './types';
 
 export const DEFAULT_PRODUCTS: Product[] = [
   { id: 'prod_document', name: 'Quick Document Print', basePrice: 5.0, active: true, config: { sizes: ['A4', 'A3', 'A5'], stocks: ['80gsm', '90gsm', '120gsm'], finishes: ['Uncoated'] } },
-  { id: 'prod_bizcard', name: 'Business Cards', basePrice: 150.0, active: true, config: { sizes: ['A6', 'custom'], stocks: ['300gsm', '350gsm'], finishes: ['Matt laminate', 'Gloss laminate', 'Soft touch', 'UV spot', 'Uncoated'] } },
   { id: 'prod_flyer', name: 'Flyers', basePrice: 250.0, active: true, config: { sizes: ['A5', 'A4'], stocks: ['80gsm', '90gsm', '120gsm', '150gsm'], finishes: ['Uncoated', 'Gloss laminate'] } },
   { id: 'prod_brochure', name: 'Brochures', basePrice: 380.0, active: true, config: { sizes: ['A4', 'A3'], stocks: ['120gsm', '150gsm', '170gsm'], finishes: ['Uncoated', 'Gloss laminate', 'Matt laminate'] } },
   { id: 'prod_banner', name: 'Banners', basePrice: 450.0, active: true, config: { sizes: ['custom', 'A1', 'A2'], stocks: ['350gsm'], finishes: ['Uncoated'] } },
-  { id: 'prod_poster', name: 'Posters', basePrice: 190.0, active: true, config: { sizes: ['A3', 'A2', 'A1'], stocks: ['150gsm', '170gsm', '250gsm'], finishes: ['Uncoated', 'Gloss laminate', 'Matt laminate'] } },
+  { id: 'prod_poster', name: 'Posters', basePrice: 190.0, active: true, config: { sizes: ['A2', 'A1', 'A0'], stocks: ['150gsm', '170gsm', '250gsm'], finishes: ['Uncoated', 'Gloss laminate', 'Matt laminate'] } },
   { id: 'prod_letterhead', name: 'Letterheads', basePrice: 220.0, active: true, config: { sizes: ['A4'], stocks: ['80gsm', '90gsm', '120gsm'], finishes: ['Uncoated'] } },
   { id: 'prod_ncrbook', name: 'NCR Books', basePrice: 280.0, active: true, config: { sizes: ['A4', 'A5'], stocks: ['80gsm'], finishes: ['Uncoated'] } },
   { id: 'prod_custom', name: 'Custom Prints', basePrice: 100.0, active: true, config: { sizes: ['A4', 'A5', 'A6', 'A3', 'A2', 'A1', 'custom'], stocks: ['80gsm', '90gsm', '120gsm', '150gsm', '170gsm', '250gsm', '300gsm', '350gsm'], finishes: ['Uncoated', 'Gloss laminate', 'Matt laminate', 'Soft touch', 'UV spot'] } }
