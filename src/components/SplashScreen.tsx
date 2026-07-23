@@ -39,33 +39,37 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
   }, [onComplete]);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950 text-white flex flex-col items-center justify-between p-8 overflow-hidden select-none animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[100] bg-slate-950 text-white flex flex-col items-center justify-between p-8 overflow-hidden select-none animate-in fade-in duration-300 bg-dark-grid">
       
       {/* Background Decorative Lighting */}
-      <div className="absolute -top-32 -left-32 w-96 h-96 bg-rose-600/15 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-sky-500/15 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-rose-600/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-sky-500/20 rounded-full blur-3xl pointer-events-none"></div>
 
       {/* Top Bar */}
       <div className="w-full max-w-2xl flex justify-between items-center text-xs text-slate-400 font-mono">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>BRANCH_TERMINAL_ONLINE</span>
+          <span>POSTNET_RONDEBOSCH_ACTIVE</span>
         </div>
         <span>v2.4.0-PROD</span>
       </div>
 
       {/* Main Center Stage */}
       <div className="flex flex-col items-center text-center max-w-md w-full space-y-6 my-auto">
-        <div className="scale-125 transform transition duration-500">
-          <PNXLogo size="xl" showSubtitle={false} />
+        <div className="flex flex-col items-center gap-3">
+          <img 
+            src="/pnxlogo.png" 
+            alt="PNX by Postnet Rondebosch" 
+            className="h-20 w-auto object-contain drop-shadow-2xl animate-pulse"
+          />
         </div>
 
         <div className="space-y-1">
           <h1 className="text-2xl sm:text-3xl font-extrabold font-display tracking-tight text-white">
-            PostNet Print OS
+            PNX by Postnet Rondebosch
           </h1>
-          <p className="text-xs text-slate-400 font-mono tracking-wider uppercase">
-            Pre-Press • IQ Retail • Express Logistics
+          <p className="text-xs text-rose-400 font-mono tracking-wider uppercase font-bold">
+            Pre-Press • Print Specs • Express Courier Portal
           </p>
         </div>
 

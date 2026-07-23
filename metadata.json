@@ -1,6 +1,6 @@
 {
-  "name": "Postnet Print OS",
-  "description": "Professional print ordering and management platform for Postnet with customer portal and staff dashboard.",
+  "name": "PNX by Postnet Rondebosch",
+  "description": "PNX Print & Packaging Portal for PostNet Rondebosch",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

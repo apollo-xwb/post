@@ -193,12 +193,12 @@ export default function App() {
               </button>
             </div>
           )}
-          <span className="hidden sm:inline">PNX Print OS v2.1.0</span>
+          <span className="hidden sm:inline font-mono font-bold text-rose-300">PNX by Postnet Rondebosch</span>
         </div>
       </div>
 
       {/* Main Glassmorphic Header Navbar */}
-      <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-50 shadow-xs">
+      <nav className="bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-50 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div 
@@ -209,11 +209,8 @@ export default function App() {
               <div className="relative">
                 <img 
                   src="/pnxlogo.png" 
-                  alt="PostNet Logo" 
-                  className="h-9 w-auto object-contain transition group-active:scale-95"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://www.dotmade.co.za/wp-content/uploads/2020/10/Postnet.jpg';
-                  }}
+                  alt="PNX by Postnet Rondebosch Logo" 
+                  className="h-10 w-auto object-contain transition group-active:scale-95 drop-shadow-xs"
                 />
                 {logoClickCount > 0 && (
                   <span className="absolute -top-1 -right-2 bg-rose-600 text-white font-mono text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-ping">
@@ -223,8 +220,8 @@ export default function App() {
               </div>
 
               <div className="hidden md:block">
-                <span className="text-xs tracking-widest text-rose-600 font-mono font-bold block uppercase">PNX PRINT OS</span>
-                <span className="text-xs font-semibold text-slate-800 font-display -mt-1 block">Pre-Press & Commerce Engine</span>
+                <span className="text-xs tracking-wider text-rose-600 font-mono font-extrabold block uppercase">PNX BY POSTNET</span>
+                <span className="text-sm font-extrabold text-slate-900 font-display -mt-0.5 block">Rondebosch Branch</span>
               </div>
             </div>
 

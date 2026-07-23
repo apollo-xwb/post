@@ -6,7 +6,7 @@ import PayFastModal from './PayFastModal';
 import { 
   FileText, Image as ImageIcon, Sliders, UploadCloud, CheckCircle, 
   ChevronRight, ChevronLeft, Sparkles, RefreshCw, AlertCircle, ShoppingBag,
-  CreditCard, Store, Lock, ArrowRight, RotateCw, ZoomIn
+  CreditCard, Store, Lock, ArrowRight, RotateCw, ZoomIn, Info, HelpCircle
 } from 'lucide-react';
 
 interface JobBuilderProps {
@@ -14,6 +14,35 @@ interface JobBuilderProps {
   profile: any;
   onNavigateToTracker?: (orderId: string) => void;
 }
+
+// Interactive Print Insight Card Component
+const PrintInsightCard = ({ title, content }: { title: string; content: React.ReactNode }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="bg-rose-50/60 border border-rose-200/80 rounded-xl p-3.5 my-3 transition-all text-xs">
+      <button 
+        type="button" 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between text-left font-semibold text-slate-800 cursor-pointer"
+      >
+        <div className="flex items-center gap-2">
+          <span className="w-5 h-5 rounded-full bg-rose-600 text-white font-mono font-bold text-[11px] flex items-center justify-center shrink-0">
+            i
+          </span>
+          <span className="text-slate-900 font-bold">{title}</span>
+        </div>
+        <span className="text-[10px] text-rose-700 font-mono font-bold underline bg-white/80 px-2 py-0.5 rounded border border-rose-200">
+          {isOpen ? 'Hide Guidance' : 'Helpful Guidance'}
+        </span>
+      </button>
+      {isOpen && (
+        <div className="mt-2.5 pt-2.5 border-t border-rose-200/80 text-slate-700 leading-relaxed space-y-1.5 animate-in fade-in duration-150 font-sans">
+          {content}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBuilderProps) {
   // Typeform Flow Step (1 to 6)
@@ -379,12 +408,27 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                 <div>
                   <span className="text-xs font-mono font-bold text-rose-600 uppercase tracking-wider block mb-1">Question 2</span>
                   <h2 className="text-xl sm:text-2xl font-bold font-display text-slate-900">Choose paper trim size and stock density</h2>
-                  <p className="text-xs text-slate-500 mt-1">Sizing is customized to your selected product type ({selectedProduct.toUpperCase()}).</p>
+                  <p className="text-xs text-slate-500 mt-1">Sizing & GSM weights are tailored for selected product: <strong className="text-rose-600">{selectedProduct.toUpperCase()}</strong>.</p>
                 </div>
+
+                <PrintInsightCard 
+                  title="Understanding Paper Sizing & GSM Stock Density"
+                  content={
+                    <ul className="list-disc pl-4 space-y-1">
+                      <li><strong>80gsm Bond (Laser)</strong>: Standard multi-page office copy paper. Light, flexible, cost-effective.</li>
+                      <li><strong>120gsm Executive / Matte</strong>: Premium smooth texture for formal proposals, letters, and resumes.</li>
+                      <li><strong>150gsm / 170gsm Silk & Gloss</strong>: Heavier satin paper ideal for double-sided promotional flyers & leaflets.</li>
+                      <li><strong>200gsm Heavy Cardstock</strong>: Rigid, opaque weight for high-gloss posters, covers, and framed graphics.</li>
+                    </ul>
+                  }
+                />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2">Paper Trim Size</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-2 flex justify-between items-center">
+                      <span>Paper Trim Size</span>
+                      <span className="text-[10px] text-rose-600 font-mono font-bold uppercase">Required</span>
+                    </label>
                     <div className="space-y-2">
                       {(selectedProduct === 'poster' 
                         ? ['A2 (420 x 594 mm)', 'A1 (594 x 841 mm)', 'A0 (841 x 1189 mm)', 'A3 (297 x 420 mm)']
@@ -398,13 +442,14 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                             key={sz}
                             type="button"
                             onClick={() => setPaperSize(code)}
-                            className={`w-full p-3 rounded-lg border text-left text-xs font-semibold transition ${
+                            className={`w-full p-3 rounded-xl border text-left text-xs font-semibold transition flex items-center justify-between ${
                               paperSize === code
-                                ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold'
-                                : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                                ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold shadow-xs'
+                                : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
                             }`}
                           >
-                            {sz}
+                            <span>{sz}</span>
+                            {paperSize === code && <CheckCircle className="w-4 h-4 text-rose-600" />}
                           </button>
                         );
                       })}
@@ -412,7 +457,10 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2">Stock Density & Weight</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-2 flex justify-between items-center">
+                      <span>Stock Density & Weight (GSM)</span>
+                      <span className="text-[10px] text-rose-600 font-mono font-bold uppercase">Required</span>
+                    </label>
                     <div className="space-y-2">
                       {(selectedProduct === 'poster'
                         ? ['150gsm Matte', '200gsm Glossy']
@@ -424,13 +472,14 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                           key={wt}
                           type="button"
                           onClick={() => setPaperWeight(wt)}
-                          className={`w-full p-3 rounded-lg border text-left text-xs font-semibold transition ${
+                          className={`w-full p-3 rounded-xl border text-left text-xs font-semibold transition flex items-center justify-between ${
                             paperWeight === wt
-                              ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold'
-                              : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                              ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold shadow-xs'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
                           }`}
                         >
-                          {wt}
+                          <span>{wt}</span>
+                          {paperWeight === wt && <CheckCircle className="w-4 h-4 text-rose-600" />}
                         </button>
                       ))}
                     </div>
@@ -447,6 +496,19 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                   <h2 className="text-xl sm:text-2xl font-bold font-display text-slate-900">Select finishing treatment & color modes</h2>
                 </div>
 
+                <PrintInsightCard 
+                  title="Choosing Finishing Treatments & Palette Modes"
+                  content={
+                    <ul className="list-disc pl-4 space-y-1">
+                      <li><strong>Plain / Unfinished</strong>: Standard clean guillotine trim with no secondary binding.</li>
+                      <li><strong>Stapled / Spiral Bound</strong>: Corner staple or heavy plastic coil coil-binding with protective clear acetate front covers.</li>
+                      <li><strong>Laminated / UV Coated</strong>: Gloss liquid or heat-sealed plastic coating providing water, tear, and fading protection.</li>
+                      <li><strong>CMYK Full Color</strong>: Vibrant 4-color high-definition laser printing for graphics, photos, and artwork.</li>
+                      <li><strong>Monochrome (B&W)</strong>: Fast laser grayscale output, ideal for text-heavy invoices & manuals.</li>
+                    </ul>
+                  }
+                />
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-2">Finishing Options</label>
@@ -461,13 +523,14 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                           key={f}
                           type="button"
                           onClick={() => setFinish(f)}
-                          className={`w-full p-3 rounded-lg border text-left text-xs font-semibold transition ${
+                          className={`w-full p-3 rounded-xl border text-left text-xs font-semibold transition flex items-center justify-between ${
                             finish === f
-                              ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold'
-                              : 'border-slate-200 hover:border-slate-300 text-slate-700'
+                              ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold shadow-xs'
+                              : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
                           }`}
                         >
-                          {f === 'None' ? 'Plain / Unfinished' : f}
+                          <span>{f === 'None' ? 'Plain / Unfinished' : f}</span>
+                          {finish === f && <CheckCircle className="w-4 h-4 text-rose-600" />}
                         </button>
                       ))}
                     </div>
@@ -477,13 +540,13 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                     <label className="block text-xs font-bold text-slate-700 mb-2">Printing Sides & Color</label>
                     <div className="space-y-3">
                       <div>
-                        <span className="text-[11px] text-slate-500 block mb-1">Sides:</span>
+                        <span className="text-[11px] text-slate-500 block mb-1 font-semibold">Print Sides:</span>
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
                             onClick={() => setSides('single')}
-                            className={`p-2.5 rounded border text-xs font-semibold transition ${
-                              sides === 'single' ? 'border-rose-600 bg-rose-50 text-rose-900' : 'border-slate-200'
+                            className={`p-2.5 rounded-xl border text-xs font-semibold transition ${
+                              sides === 'single' ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold' : 'border-slate-200 bg-white'
                             }`}
                           >
                             Single Sided
@@ -492,8 +555,8 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                             type="button"
                             disabled={selectedProduct === 'poster'}
                             onClick={() => setSides('double')}
-                            className={`p-2.5 rounded border text-xs font-semibold transition ${
-                              sides === 'double' ? 'border-rose-600 bg-rose-50 text-rose-900' : 'border-slate-200'
+                            className={`p-2.5 rounded-xl border text-xs font-semibold transition ${
+                              sides === 'double' ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold' : 'border-slate-200 bg-white'
                             } ${selectedProduct === 'poster' ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
                             Double Sided
@@ -502,13 +565,13 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                       </div>
 
                       <div>
-                        <span className="text-[11px] text-slate-500 block mb-1">Color Palette:</span>
+                        <span className="text-[11px] text-slate-500 block mb-1 font-semibold">Color Palette:</span>
                         <div className="grid grid-cols-2 gap-2">
                           <button
                             type="button"
                             onClick={() => setColorMode('color')}
-                            className={`p-2.5 rounded border text-xs font-semibold transition ${
-                              colorMode === 'color' ? 'border-rose-600 bg-rose-50 text-rose-900' : 'border-slate-200'
+                            className={`p-2.5 rounded-xl border text-xs font-semibold transition ${
+                              colorMode === 'color' ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold' : 'border-slate-200 bg-white'
                             }`}
                           >
                             Full Color CMYK
@@ -516,8 +579,8 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                           <button
                             type="button"
                             onClick={() => setColorMode('grayscale')}
-                            className={`p-2.5 rounded border text-xs font-semibold transition ${
-                              colorMode === 'grayscale' ? 'border-rose-600 bg-rose-50 text-rose-900' : 'border-slate-200'
+                            className={`p-2.5 rounded-xl border text-xs font-semibold transition ${
+                              colorMode === 'grayscale' ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold' : 'border-slate-200 bg-white'
                             }`}
                           >
                             Monochrome
@@ -537,6 +600,18 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                   <span className="text-xs font-mono font-bold text-rose-600 uppercase tracking-wider block mb-1">Question 4</span>
                   <h2 className="text-xl sm:text-2xl font-bold font-display text-slate-900">How many copies and how fast do you need it?</h2>
                 </div>
+
+                <PrintInsightCard 
+                  title="Production Turnarounds & Quantity Tier Discounts"
+                  content={
+                    <ul className="list-disc pl-4 space-y-1">
+                      <li><strong>Standard (2-3 Days)</strong>: Our best value rate for standard print scheduling.</li>
+                      <li><strong>Express (24 Hours)</strong>: Next-day dispatch priority for urgent meetings.</li>
+                      <li><strong>Rush Priority (3 Hours)</strong>: Emergency counter queue at PostNet Rondebosch.</li>
+                      <li><strong>Volume Tier Discounts</strong>: 200+ copies receive 10% off; 500+ copies receive 20% off automatically!</li>
+                    </ul>
+                  }
+                />
 
                 <div className="space-y-6 bg-slate-50 p-6 rounded-xl border border-slate-200">
                   <div>
@@ -570,14 +645,17 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                           key={t.id}
                           type="button"
                           onClick={() => setTurnaround(t.id as any)}
-                          className={`p-3 rounded-lg border text-left transition ${
+                          className={`p-3 rounded-xl border text-left transition flex items-center justify-between ${
                             turnaround === t.id
-                              ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold'
+                              ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold shadow-xs'
                               : 'border-slate-200 bg-white text-slate-700'
                           }`}
                         >
-                          <span className="text-xs block font-bold">{t.label}</span>
-                          <span className="text-[10px] text-slate-500 font-mono block mt-0.5">{t.surge}</span>
+                          <div>
+                            <span className="text-xs block font-bold">{t.label}</span>
+                            <span className="text-[10px] text-slate-500 font-mono block mt-0.5">{t.surge}</span>
+                          </div>
+                          {turnaround === t.id && <CheckCircle className="w-4 h-4 text-rose-600 shrink-0" />}
                         </button>
                       ))}
                     </div>
@@ -594,39 +672,72 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                   <h2 className="text-xl sm:text-2xl font-bold font-display text-slate-900">Upload design file & calibrate safe bleed</h2>
                 </div>
 
+                <PrintInsightCard 
+                  title="3mm Trim Bleed & Safe Margin Guidelines"
+                  content={
+                    <ul className="list-disc pl-4 space-y-1">
+                      <li><strong>Trim Bleed Margin</strong>: Extending your background color 3mm past the edge prevents white slivers after cutting.</li>
+                      <li><strong>Safe Box Limit</strong>: Keep all text, contact numbers, and logos inside the inner margin guide.</li>
+                      <li><strong>Accepted File Types</strong>: PDF, PNG, JPG, EPS or TIFF vector assets.</li>
+                    </ul>
+                  }
+                />
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Upload Drop Zone */}
                   <div>
                     {!uploadedFile ? (
-                      <div
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition flex flex-col items-center justify-center gap-3 h-full min-h-[220px] ${
-                          isDragging ? 'border-rose-600 bg-rose-50' : 'border-slate-300 hover:border-slate-400 bg-slate-50'
-                        }`}
-                      >
-                        <UploadCloud className="w-10 h-10 text-slate-400" />
-                        <div>
-                          <span className="text-xs font-bold block text-slate-700">Click or Drag & Drop File</span>
-                          <span className="text-[10px] text-slate-400 block mt-0.5">PDF, JPG, PNG vector assets</span>
+                      <div className="space-y-3">
+                        <div
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
+                          onClick={() => fileInputRef.current?.click()}
+                          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition flex flex-col items-center justify-center gap-3 min-h-[200px] ${
+                            isDragging ? 'border-rose-600 bg-rose-50' : 'border-slate-300 hover:border-slate-400 bg-slate-50'
+                          }`}
+                        >
+                          <UploadCloud className="w-10 h-10 text-rose-600" />
+                          <div>
+                            <span className="text-xs font-bold block text-slate-800">Click or Drag & Drop File</span>
+                            <span className="text-[10px] text-slate-500 block mt-0.5">PDF, JPG, PNG vector assets (up to 50MB)</span>
+                          </div>
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileChange}
+                            className="hidden"
+                            accept="application/pdf,image/*"
+                          />
                         </div>
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          onChange={handleFileChange}
-                          className="hidden"
-                          accept="application/pdf,image/*"
-                        />
+
+                        {/* Quick Sample File Trigger */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadedFile({
+                              name: 'PostNet_Sample_Design_Proof.pdf',
+                              size: 1024 * 350,
+                              url: '/pnxlogo.png',
+                              type: 'application/pdf'
+                            });
+                          }}
+                          className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 border border-slate-200"
+                        >
+                          <Sparkles className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Attach Test Artwork Proof</span>
+                        </button>
                       </div>
                     ) : (
                       <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-800 truncate">{uploadedFile.name}</span>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span className="text-xs font-bold text-slate-800 truncate">{uploadedFile.name}</span>
+                          </div>
                           <button
                             onClick={() => { setUploadedFile(null); resetCanvas(); }}
-                            className="text-xs text-rose-600 font-bold"
+                            className="text-xs text-rose-600 font-bold underline hover:text-rose-700"
                           >
                             Remove
                           </button>
@@ -637,7 +748,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                   </div>
 
                   {/* Pre-Press Preview Canvas */}
-                  <div className="bg-slate-950 rounded-xl p-4 text-white flex flex-col items-center justify-center min-h-[280px] relative overflow-hidden">
+                  <div className="bg-slate-950 rounded-xl p-4 text-white flex flex-col items-center justify-center min-h-[280px] relative overflow-hidden bg-dark-grid">
                     <div className="absolute top-2 left-2 text-[8px] font-mono font-bold text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded z-10 bg-slate-950/80">
                       3MM TRIM BLEED GUIDES
                     </div>
@@ -675,7 +786,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                             onClick={() => setRotation((r) => (r + 90) % 360)}
                             className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded flex items-center gap-1"
                           >
-                            <RotateCw className="w-3 h-3" /> Rotate 90°
+                            <RotateCw className="w-3 h-3 text-rose-400" /> Rotate 90°
                           </button>
 
                           <button
@@ -683,7 +794,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                             onClick={() => setZoom((z) => Math.min(150, z + 10))}
                             className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded flex items-center gap-1"
                           >
-                            <ZoomIn className="w-3 h-3" /> Zoom +
+                            <ZoomIn className="w-3 h-3 text-rose-400" /> Zoom +
                           </button>
 
                           <button
@@ -789,7 +900,17 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
               {currentStep < totalSteps ? (
                 <button
                   type="button"
-                  onClick={() => setCurrentStep((prev) => Math.min(totalSteps, prev + 1))}
+                  onClick={() => {
+                    if (currentStep === 5 && !uploadedFile) {
+                      setUploadedFile({
+                        name: 'PostNet_Sample_Design_Proof.pdf',
+                        size: 1024 * 350,
+                        url: '/pnxlogo.png',
+                        type: 'application/pdf'
+                      });
+                    }
+                    setCurrentStep((prev) => Math.min(totalSteps, prev + 1));
+                  }}
                   className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
                 >
                   <span>Next Step</span>
