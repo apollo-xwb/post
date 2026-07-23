@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import PNXLogo from './PNXLogo';
+import pnxLogo from '../assets/pnxlogo.png';
 import { ArrowRight, ShieldCheck, Cpu, Truck, Sparkles } from 'lucide-react';
 
 interface SplashScreenProps {
@@ -56,20 +56,14 @@ export default function SplashScreen({ onComplete }: SplashScreenProps) {
 
       {/* Main Center Stage */}
       <div className="flex flex-col items-center text-center max-w-md w-full space-y-6 my-auto">
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-2">
           <img 
-            src="/pnxlogo.png" 
-            alt="PNX by Postnet Rondebosch" 
-            className="h-20 w-auto object-contain drop-shadow-2xl animate-pulse"
+            src={pnxLogo} 
+            alt="PNX" 
+            className="h-24 sm:h-28 w-auto object-contain drop-shadow-2xl animate-pulse"
           />
-        </div>
-
-        <div className="space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-extrabold font-display tracking-tight text-white">
-            PNX by Postnet Rondebosch
-          </h1>
-          <p className="text-xs text-rose-400 font-mono tracking-wider uppercase font-bold">
-            Pre-Press • Print Specs • Express Courier Portal
+          <p className="text-base sm:text-lg font-bold font-sans tracking-wide text-rose-400 mt-1">
+            by Postnet Rondebosch.
           </p>
         </div>
 

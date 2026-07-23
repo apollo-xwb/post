@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import pnxLogo from '../assets/pnxlogo.png';
 
 interface PNXLogoProps {
   className?: string;
@@ -18,13 +19,13 @@ export default function PNXLogo({ className = '', size = 'md', showSubtitle = tr
 
   return (
     <div className={`inline-flex items-center gap-2.5 select-none ${className}`}>
-      {/* PNG Logo from /pnxlogo.png or SVG fallback */}
+      {/* PNG Logo from bundled asset with SVG fallback */}
       <div className={`${heightClass} flex items-center justify-center shrink-0`}>
         {!imgError ? (
           <img
-            src="/pnxlogo.png"
+            src={pnxLogo}
             alt="PNX by Postnet Rondebosch Logo"
-            className={`${heightClass} w-auto object-contain drop-shadow-sm rounded-lg`}
+            className={`${heightClass} w-auto object-contain drop-shadow-xs rounded-lg`}
             onError={() => setImgError(true)}
           />
         ) : (

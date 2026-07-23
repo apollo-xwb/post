@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import pnxLogo from '../assets/pnxlogo.png';
 import { Order } from '../types';
 import { 
   X, Printer, Download, CheckCircle, FileText, 
@@ -93,12 +94,9 @@ PostNet Rondebosch Branch (VAT: 4810293812)`;
           <div className="flex flex-col sm:flex-row justify-between items-start gap-4 border-b border-slate-200 pb-6">
             <div>
               <img 
-                src="/pnxlogo.png" 
+                src={pnxLogo} 
                 alt="PostNet Logo" 
                 className="h-10 w-auto object-contain mb-2"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://www.dotmade.co.za/wp-content/uploads/2020/10/Postnet.jpg';
-                }}
               />
               <span className="text-xs font-bold text-slate-900 block font-display">PostNet Rondebosch Branch</span>
               <span className="text-[11px] text-slate-500 block">Main Road, Rondebosch, Cape Town, 7700</span>

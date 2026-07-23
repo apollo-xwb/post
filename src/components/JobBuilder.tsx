@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import pnxLogo from '../assets/pnxlogo.png';
 import { db } from '../App';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { Order, OrderFile } from '../types';
@@ -358,7 +359,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
           </div>
 
           {/* STEP CARDS */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 sm:p-10 flex-1 flex flex-col justify-between my-2 transition-all">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 sm:p-10 flex-1 flex flex-col justify-between my-2 transition-all bg-light-grid">
             
             {/* STEP 1: PRODUCT CATEGORY */}
             {currentStep === 1 && (
@@ -718,7 +719,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                             setUploadedFile({
                               name: 'PostNet_Sample_Design_Proof.pdf',
                               size: 1024 * 350,
-                              url: '/pnxlogo.png',
+                              url: pnxLogo,
                               type: 'application/pdf'
                             });
                           }}
@@ -905,7 +906,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                       setUploadedFile({
                         name: 'PostNet_Sample_Design_Proof.pdf',
                         size: 1024 * 350,
-                        url: '/pnxlogo.png',
+                        url: pnxLogo,
                         type: 'application/pdf'
                       });
                     }
