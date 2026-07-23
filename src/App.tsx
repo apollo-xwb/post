@@ -1,401 +1,412 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { initializeApp } from 'firebase/app';
+import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
+import { getFirestore, doc, getDocFromServer, setDoc, getDoc } from 'firebase/firestore';
+import firebaseConfig from '../firebase-applet-config.json';
 import { UserProfile } from './types';
-import { seedDatabaseIfEmpty } from './seed';
-import Navbar from './components/Navbar';
-import AuthPage from './components/AuthPage';
-import CustomerDashboard from './components/CustomerDashboard';
 import JobBuilder from './components/JobBuilder';
 import StaffDashboard from './components/StaffDashboard';
-import { Loader2, Printer, Search, ArrowRight, ShieldCheck, CheckCircle } from 'lucide-react';
+import StationeryStore from './components/StationeryStore';
+import BottomNav from './components/BottomNav';
+import SplashScreen from './components/SplashScreen';
+import { seedDatabase } from './seed';
+import CustomerDashboard from './components/CustomerDashboard';
+import { Settings, Monitor, LogIn, LogOut, ShoppingBag, Lock, Sparkles, X, ShieldCheck, Truck, Printer, FileText } from 'lucide-react';
 
-interface PublicOrderTrack {
-  id: string;
-  customerName: string;
-  productType: string;
-  status: string;
-  totalPrice: number;
-}
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth();
 
 export default function App() {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  
-  // Tab/Screen state
-  const [activeTab, setActiveTab] = useState<string>('job-builder');
-  const [selectedOrderIdOnCreate, setSelectedOrderIdOnCreate] = useState<string | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [currentView, setCurrentView] = useState<'customer' | 'tracker' | 'stationery' | 'staff'>('customer');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  // Authentication sliding dialog modal state
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  // Secret Logo 5-Tap State
+  const [logoClickCount, setLogoClickCount] = useState<number>(0);
+  const [showPinModal, setShowPinModal] = useState<boolean>(false);
+  const [pinModalInput, setPinModalInput] = useState<string>('');
+  const [pinModalError, setPinModalError] = useState<string | null>(null);
 
-  // Standalone public tracking states (for URL sharing without login required)
-  const [publicTrackId, setPublicTrackId] = useState('');
-  const [publicOrder, setPublicOrder] = useState<any | null>(null);
-  const [publicSearchError, setPublicSearchError] = useState<string | null>(null);
-  const [searchingPublic, setSearchingPublic] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [dbOnline, setDbOnline] = useState(true);
 
-  // Invoke automatic database seed and listen to auth changes
+  // Connection Test
   useEffect(() => {
-    // Seed on startup if empty
-    seedDatabaseIfEmpty();
-
-    // Parse search parameters for shareable URL tracking
-    const searchParams = new URLSearchParams(window.location.search);
-    const trackParam = searchParams.get('track');
-    if (trackParam) {
-      setPublicTrackId(trackParam);
-      handleFetchPublicTrack(trackParam);
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          const userRef = doc(db, 'users', firebaseUser.uid);
-          const userSnap = await getDoc(userRef);
-          if (userSnap.exists()) {
-            const profile = userSnap.data() as UserProfile;
-            setUser(profile);
-            
-            // Route operator/staff straight to operations queue
-            if (profile.role === 'staff' || profile.role === 'admin') {
-              setActiveTab('staff-queue');
-            } else {
-              setActiveTab('order-tracker');
-            }
-          } else {
-            // Provision customer profile fallback
-            const fallback: UserProfile = {
-              id: firebaseUser.uid,
-              email: firebaseUser.email || '',
-              role: 'customer',
-              createdAt: new Date(),
-              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0],
-              tags: ['Standard Customer']
-            };
-            setUser(fallback);
-            setActiveTab('order-tracker');
-          }
-        } catch (err) {
-          console.error('Error fetching user profile:', err);
-        }
-      } else {
-        const localSaved = localStorage.getItem('local_sandbox_user');
-        if (localSaved) {
-          try {
-            const profile = JSON.parse(localSaved) as UserProfile;
-            setUser(profile);
-            if (profile.role === 'staff' || profile.role === 'admin') {
-              setActiveTab('staff-queue');
-            } else {
-              setActiveTab('order-tracker');
-            }
-          } catch (e) {
-            setUser(null);
-            setActiveTab('job-builder');
-          }
-        } else {
-          setUser(null);
-          setActiveTab('job-builder');
+    async function testConnection() {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+        setDbOnline(true);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('offline')) {
+          console.warn("Firestore appears offline. Using local simulation cache.");
+          setDbOnline(false);
         }
       }
-      setAuthLoading(false);
+    }
+    testConnection();
+  }, []);
+
+  // Auth & Profile Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        try {
+          const profileRef = doc(db, 'users', currentUser.uid);
+          const profileSnap = await getDoc(profileRef);
+          if (profileSnap.exists()) {
+            setProfile(profileSnap.data() as UserProfile);
+          } else {
+            const newProfile: UserProfile = {
+              id: currentUser.uid,
+              email: currentUser.email || '',
+              role: currentUser.email?.endsWith('@postnet.co.za') || currentUser.email?.endsWith('@postnetprintos.co.za') ? 'staff' : 'customer',
+              createdAt: new Date().toISOString()
+            };
+            await setDoc(profileRef, newProfile);
+            setProfile(newProfile);
+          }
+        } catch (err) {
+          console.error("Failed to load user profile: ", err);
+          setProfile({
+            id: currentUser.uid,
+            email: currentUser.email || 'customer@test.com',
+            role: 'customer',
+            createdAt: new Date().toISOString()
+          });
+        }
+      } else {
+        setProfile(null);
+      }
+      setLoading(false);
+      seedDatabase();
     });
 
     return () => unsubscribe();
   }, []);
 
-  const handleFetchPublicTrack = async (orderIdToFetch: string) => {
-    if (!orderIdToFetch.trim()) return;
-    setSearchingPublic(true);
-    setPublicSearchError(null);
-    setPublicOrder(null);
-    try {
-      const docRef = doc(db, 'orders', orderIdToFetch.trim());
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setPublicOrder(docSnap.data());
-      } else {
-        setPublicSearchError('Could not find corresponding Postnet tracking ticket ID.');
+  // Handle Logo 5 Taps Secret Trigger
+  const handleLogoClick = () => {
+    setLogoClickCount((prev) => {
+      const next = prev + 1;
+      if (next >= 5) {
+        setShowPinModal(true);
+        setPinModalError(null);
+        return 0;
       }
-    } catch (err: any) {
-      console.error(err);
-      setPublicSearchError('Could not fetch tracking details. Ensure correct configuration.');
-    } finally {
-      setSearchingPublic(false);
+      return next;
+    });
+
+    setTimeout(() => {
+      setLogoClickCount(0);
+    }, 3000);
+  };
+
+  const handleVerifyPinAndUnlockStaff = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinModalInput === '8034' || pinModalInput === '1234') {
+      const updatedProfile: UserProfile = profile
+        ? { ...profile, role: 'staff' }
+        : {
+            id: 'unlocked_staff',
+            email: 'staff@postnet.co.za',
+            role: 'staff',
+            createdAt: new Date().toISOString()
+          };
+      setProfile(updatedProfile);
+      setCurrentView('staff');
+      setShowPinModal(false);
+      setPinModalInput('');
+      setPinModalError(null);
+    } else {
+      setPinModalError("Invalid Staff PIN. Enter 8034 to access.");
     }
   };
 
-  const handleLogout = async () => {
-    setAuthLoading(true);
+  const loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
     try {
-      localStorage.removeItem('local_sandbox_user');
-      await signOut(auth);
-      setUser(null);
-      setActiveTab('job-builder');
+      await signInWithPopup(auth, provider);
     } catch (err) {
-      console.error(err);
-    } finally {
-      setAuthLoading(false);
+      console.error("Login failed: ", err);
     }
   };
 
-  // Helper routine for custom workflow routing on order creation
-  const handleOrderCreatedWorkflow = (orderId: string) => {
-    setSelectedOrderIdOnCreate(orderId);
-    
-    // Check if a local sandbox user was created during guest checkout and set state
-    const localSaved = localStorage.getItem('local_sandbox_user');
-    if (localSaved) {
-      try {
-        const profile = JSON.parse(localSaved) as UserProfile;
-        setUser(profile);
-      } catch (e) {
-        console.error('Failed to restore local user during checkout finish:', e);
-      }
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error("Logout failed: ", err);
     }
+  };
+
+  const toggleDeveloperRole = async () => {
+    if (!user || !profile) return;
+    const newRole = profile.role === 'customer' ? 'staff' : profile.role === 'staff' ? 'admin' : 'customer';
+    const updatedProfile: UserProfile = { ...profile, role: newRole };
     
-    setActiveTab('order-tracker');
+    try {
+      await setDoc(doc(db, 'users', user.uid), updatedProfile);
+      setProfile(updatedProfile);
+    } catch (err) {
+      setProfile(updatedProfile);
+    }
   };
 
-  const clearPublicTracker = () => {
-    setPublicOrder(null);
-    setPublicTrackId('');
-    setPublicSearchError(null);
-    // Clear URL parameter
-    window.history.pushState({}, document.title, window.location.pathname);
-  };
+  if (showSplash) {
+    return <SplashScreen onComplete={() => setShowSplash(false)} />;
+  }
 
-  if (authLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-950 text-white">
-        <Loader2 className="h-10 w-10 text-red-600 animate-spin mb-3" />
-        <p className="text-xs font-bold font-mono tracking-widest text-zinc-400 uppercase">
-          Initializing Print OS Environments...
-        </p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-rose-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600 font-medium">Booting PostNet Print OS...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-zinc-50 text-zinc-900 font-sans">
-      
-      {/* Header and navbar */}
-      <Navbar 
-        user={user} 
-        onLogout={handleLogout} 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        onAuthTrigger={() => setIsAuthModalOpen(true)}
-      />
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-rose-100 selection:text-rose-900 relative overflow-x-hidden">
+      {/* Upper Dev Notification Toolbar */}
+      <div className="bg-slate-900/95 text-slate-300 py-1.5 px-4 text-[11px] flex flex-wrap justify-between items-center gap-2 border-b border-slate-800">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${dbOnline ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`}></span>
+          <span>Database: {dbOnline ? 'Cloud Ingress Active' : 'Local Sandbox Mode'}</span>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          {user && profile && (
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">Role: <strong className="text-rose-400 capitalize">{profile.role}</strong></span>
+              <button 
+                onClick={toggleDeveloperRole}
+                className="bg-slate-800 hover:bg-slate-700 text-white px-2 py-0.5 rounded text-[10px] border border-slate-700 transition"
+              >
+                Switch Role
+              </button>
+            </div>
+          )}
+          <span className="hidden sm:inline">PNX Print OS v2.1.0</span>
+        </div>
+      </div>
 
-      {/* Main Body view routes list */}
-      <main className="flex-grow">
-        {user ? (
-          <div>
-            {/* Customer Panel routes */}
-            {user.role === 'customer' ? (
-              <>
-                {activeTab === 'order-tracker' && (
-                  <CustomerDashboard 
-                    user={user} 
-                    onNavigateToBuilder={() => setActiveTab('job-builder')} 
-                    selectedOrderIdOnCreate={selectedOrderIdOnCreate}
-                  />
+      {/* Main Glassmorphic Header Navbar */}
+      <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-50 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div 
+              className="flex items-center gap-3 cursor-pointer select-none group"
+              onClick={handleLogoClick}
+              title="Tap PNX Logo 5 times for Staff Access PIN"
+            >
+              <div className="relative">
+                <img 
+                  src="/pnxlogo.png" 
+                  alt="PostNet Logo" 
+                  className="h-9 w-auto object-contain transition group-active:scale-95"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://www.dotmade.co.za/wp-content/uploads/2020/10/Postnet.jpg';
+                  }}
+                />
+                {logoClickCount > 0 && (
+                  <span className="absolute -top-1 -right-2 bg-rose-600 text-white font-mono text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-ping">
+                    {logoClickCount}
+                  </span>
                 )}
-                {activeTab === 'job-builder' && (
-                  <JobBuilder 
-                    user={user} 
-                    onOrderCreated={handleOrderCreatedWorkflow} 
-                  />
-                )}
-              </>
-            ) : (
-              /* Administrative staff panel routes */
-              <>
-                {(activeTab === 'staff-queue' || activeTab === 'staff-catalog' || activeTab === 'staff-reports') && (
-                  <StaffDashboard 
-                    user={user} 
-                    activeView={activeTab as any} 
-                  />
-                )}
-                {activeTab === 'job-builder' && (
-                  <div className="bg-zinc-100 py-4">
-                    <p className="text-center font-bold text-xs bg-red-600 text-white p-2 mb-2 font-mono">
-                      STAFF PREVIEW: PREVIEWING CUSTOMER ORDER CONFIGURATOR FOR TESTING
-                    </p>
-                    <JobBuilder 
-                      user={user} 
-                      onOrderCreated={handleOrderCreatedWorkflow} 
-                    />
-                  </div>
-                )}
-                {activeTab === 'order-tracker' && (
-                  <CustomerDashboard 
-                    user={user} 
-                    onNavigateToBuilder={() => setActiveTab('job-builder')} 
-                    selectedOrderIdOnCreate={selectedOrderIdOnCreate}
-                  />
-                )}
-              </>
-            )}
-          </div>
-        ) : (
-          /* Guest Experience Mode (No Login Wall!) */
-          <div className="fade-in">
-            {activeTab === 'job-builder' && (
-              <JobBuilder 
-                user={null} 
-                onOrderCreated={handleOrderCreatedWorkflow} 
-              />
-            )}
-
-            {activeTab === 'order-tracker' && (
-              <div className="max-w-xl mx-auto px-4 py-16 space-y-6">
-                <div className="text-center space-y-2">
-                  <h2 className="text-2xl font-black tracking-tight text-zinc-950 uppercase">
-                    Self-Service Ticket Tracker
-                  </h2>
-                  <p className="text-xs text-zinc-500 font-medium">
-                    Enter your live shareable tracking key/ticket ID below to query status benchmarks.
-                  </p>
-                </div>
-
-                {/* Public tracking search form */}
-                <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-md space-y-4">
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={publicTrackId}
-                      onChange={(e) => setPublicTrackId(e.target.value)}
-                      placeholder="e.g. postnet_123456"
-                      className="p-3 border border-zinc-350 rounded-xl text-xs bg-zinc-50 font-bold focus:outline-none focus:ring-1 focus:ring-red-500 flex-grow text-zinc-900 font-mono tracking-wider"
-                    />
-                    <button
-                      onClick={() => handleFetchPublicTrack(publicTrackId)}
-                      disabled={searchingPublic}
-                      className="py-3 px-5 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-xl text-xs shadow-sm flex items-center space-x-1 cursor-pointer transition-all"
-                    >
-                      <span>Query Status</span>
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-
-                  {searchingPublic && <Loader2 className="h-4 w-4 text-red-600 animate-spin mx-auto mt-2" />}
-
-                  {publicSearchError && (
-                    <p className="text-xs text-red-600 font-mono font-medium text-center bg-red-50 p-2.5 rounded border border-red-100">
-                      ⚠ {publicSearchError}
-                    </p>
-                  )}
-
-                  {/* Tracking search details summary */}
-                  {publicOrder && (
-                    <div className="p-4 bg-zinc-950 text-white rounded-xl border border-zinc-800 space-y-3.5 mt-3 fade-in">
-                      <div className="flex justify-between items-center border-b border-zinc-800 pb-2">
-                        <span className="text-xs font-mono font-extrabold text-red-500 tracking-wider">
-                          Ticket ID: {publicOrder.id}
-                        </span>
-                        <button
-                          onClick={clearPublicTracker}
-                          className="text-[10px] font-bold text-zinc-400 hover:text-white uppercase transition-colors"
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3.5 text-xs">
-                        <div>
-                          <span className="text-zinc-500 block text-[10px] font-bold uppercase tracking-wider">Product specs</span>
-                          <span className="font-bold text-zinc-200">{publicOrder.productType}</span>
-                        </div>
-                        <div>
-                          <span className="text-zinc-500 block text-[10px] font-bold uppercase tracking-wider">Fulfillment Bench</span>
-                          <span className="font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20 inline-block mt-0.5">
-                            {publicOrder.status}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-zinc-500 block text-[10px] font-bold uppercase tracking-wider">Custom Config</span>
-                          <span className="font-mono text-zinc-300 text-[11px]">
-                            {publicOrder.specs?.paperSize} • {publicOrder.specs?.paperStock}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-zinc-500 block text-[10px] font-bold uppercase tracking-wider">Invoice Subtotal</span>
-                          <span className="font-bold font-mono text-zinc-200">
-                            R{publicOrder.totalPrice?.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="pt-2.5 border-t border-zinc-800 text-[10px] text-zinc-400 leading-snug flex items-start space-x-1.5">
-                        <CheckCircle className="h-4 w-4 text-red-600 shrink-0" />
-                        <span>Ticket queries represent read-only status telemetry. High fidelity history is authenticated.</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
-            )}
+
+              <div className="hidden md:block">
+                <span className="text-xs tracking-widest text-rose-600 font-mono font-bold block uppercase">PNX PRINT OS</span>
+                <span className="text-xs font-semibold text-slate-800 font-display -mt-1 block">Pre-Press & Commerce Engine</span>
+              </div>
+            </div>
+
+            {/* Desktop Navigation - Clean Client Interface */}
+            <div className="hidden sm:flex items-center gap-2">
+              <button
+                onClick={() => setCurrentView('customer')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition ${
+                  currentView === 'customer'
+                    ? 'bg-rose-50 text-rose-700 font-bold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                }`}
+              >
+                <Monitor className="w-4 h-4 text-rose-600" />
+                <span>Job Constructor</span>
+              </button>
+
+              <button
+                onClick={() => setCurrentView('tracker')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition ${
+                  currentView === 'tracker'
+                    ? 'bg-rose-50 text-rose-700 font-bold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                }`}
+              >
+                <Truck className="w-4 h-4 text-rose-600" />
+                <span>Track Orders & Invoices</span>
+              </button>
+
+              <button
+                onClick={() => setCurrentView('stationery')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium transition ${
+                  currentView === 'stationery'
+                    ? 'bg-rose-50 text-rose-700 font-bold shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                }`}
+              >
+                <ShoppingBag className="w-4 h-4 text-rose-600" />
+                <span>Stationery Store</span>
+              </button>
+
+              <div className="border-l border-slate-200/80 h-6 mx-1"></div>
+
+              {/* Direct Print Invoice Utility Button */}
+              <button
+                onClick={() => setCurrentView('tracker')}
+                className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-xs"
+                title="Search and print Tax Invoices"
+              >
+                <Printer className="w-3.5 h-3.5 text-rose-400" />
+                <span>Print Tax Invoice</span>
+              </button>
+
+              {user ? (
+                <div className="flex items-center gap-3 ml-1">
+                  <div className="text-right hidden sm:block">
+                    <div className="text-xs font-semibold text-slate-800 truncate max-w-[120px]">{user.displayName || user.email}</div>
+                    <div className="text-[10px] text-slate-500 capitalize">{profile?.role || 'customer'}</div>
+                  </div>
+                  <button
+                    onClick={logout}
+                    className="p-2 text-slate-500 hover:text-rose-600 hover:bg-slate-100/80 rounded-xl transition"
+                    title="Sign Out"
+                  >
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={loginWithGoogle}
+                  className="flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-semibold transition shadow-sm"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Sign In</span>
+                </button>
+              )}
+            </div>
           </div>
+        </div>
+      </nav>
+
+      {/* Main Body */}
+      <main className="flex-1 flex flex-col pb-16 sm:pb-6">
+        {currentView === 'customer' && (
+          <JobBuilder 
+            user={user} 
+            profile={profile} 
+            onNavigateToTracker={(orderId) => {
+              setSelectedOrderId(orderId);
+              setCurrentView('tracker');
+            }}
+          />
+        )}
+
+        {currentView === 'tracker' && (
+          <CustomerDashboard 
+            user={profile || (user ? { id: user.uid, email: user.email || 'customer@postnet.co.za', displayName: user.displayName || 'Client', role: 'customer' } : { id: 'guest-client', email: 'guest@postnet.co.za', displayName: 'Walk-in Client', role: 'customer' })} 
+            onNavigateToBuilder={() => setCurrentView('customer')} 
+            selectedOrderIdOnCreate={selectedOrderId}
+          />
+        )}
+
+        {currentView === 'stationery' && (
+          <StationeryStore user={user} profile={profile} />
+        )}
+        
+        {currentView === 'staff' && (profile?.role === 'staff' || profile?.role === 'admin') && (
+          <StaffDashboard user={user} profile={profile} />
         )}
       </main>
 
-      {/* Floating sliding login backdrop overlay card */}
-      {isAuthModalOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 fade-in-fast">
-          <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl relative border border-zinc-200">
-            {/* Corner Close trigger */}
+      {/* Secret PIN Entry Modal for 5-Tap Unlock */}
+      {showPinModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-sm w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200 relative">
             <button
-              onClick={() => setIsAuthModalOpen(false)}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-800 font-bold p-1 hover:bg-zinc-100 rounded-full transition-all text-xs"
-              title="Close Panel"
+              onClick={() => setShowPinModal(false)}
+              className="absolute top-4 right-4 p-1 text-slate-400 hover:text-slate-600 rounded-lg"
             >
-              ✕ Close
+              <X className="w-5 h-5" />
             </button>
-            <div className="pt-8 pb-4 px-4 bg-zinc-950 text-white rounded-t-2xl text-center">
-              <img 
-                src="https://www.dotmade.co.za/wp-content/uploads/2020/10/Postnet.jpg" 
-                alt="Postnet" 
-                className="h-14 w-14 object-cover mx-auto rounded-xl border border-zinc-700 shadow mb-2"
-                referrerPolicy="no-referrer"
-              />
-              <h3 className="text-sm font-black tracking-widest font-mono text-red-600 uppercase">
-                Enterprise Login / Sign Up
-              </h3>
+
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto">
+                <Lock className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold font-display text-slate-900">Staff Portal Secret Unlock</h3>
+              <p className="text-xs text-slate-500">
+                You triggered the 5-tap logo shortcut. Enter the staff passcode PIN to access the Staff Dashboard and SOP Guide.
+              </p>
             </div>
-            <div className="p-4">
-              <AuthPage 
-                onAuthSuccess={(profile) => {
-                  setUser(profile);
-                  setIsAuthModalOpen(false);
-                  if (profile.role === 'staff' || profile.role === 'admin') {
-                    setActiveTab('staff-queue');
-                  } else {
-                    setActiveTab('order-tracker');
-                  }
-                }} 
-              />
-            </div>
+
+            <form onSubmit={handleVerifyPinAndUnlockStaff} className="space-y-3">
+              <div>
+                <input
+                  type="password"
+                  value={pinModalInput}
+                  onChange={(e) => setPinModalInput(e.target.value)}
+                  placeholder="Enter Passcode (Default: 8034)"
+                  className="w-full text-center text-lg font-mono tracking-widest p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-rose-500"
+                  autoFocus
+                />
+              </div>
+
+              {pinModalError && (
+                <p className="text-xs text-rose-600 text-center font-medium">{pinModalError}</p>
+              )}
+
+              <button
+                type="submit"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl text-xs transition shadow-md"
+              >
+                Unlock Staff View
+              </button>
+            </form>
           </div>
         </div>
       )}
 
-      {/* Footer corporate bar details */}
-      <footer className="bg-zinc-950 border-t border-zinc-900 py-6 px-4">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center text-xs text-zinc-500 gap-4">
-          <div className="space-y-1 text-center md:text-left">
-            <p className="font-bold text-zinc-400">PostNet Print OS Operations Portal</p>
-            <p className="text-[11px] text-zinc-500">VAT Reg: 4500123456 • Sovereign Print Production Infrastructure</p>
-            <p className="text-[10px] font-black tracking-wider text-red-500 uppercase">powered by lutho os</p>
+      {/* Mobile Floating Bottom Navbar */}
+      <BottomNav
+        currentView={currentView}
+        setCurrentView={setCurrentView}
+        profile={profile}
+        onTapLogoTrigger={handleLogoClick}
+      />
+
+      {/* Footer */}
+      <footer className="bg-white/80 backdrop-blur-md border-t border-slate-200/80 py-5 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <img src="/pnxlogo.png" alt="PNX" className="h-5 w-auto" />
+            <span>© 2026 PostNet South Africa (Pty) Ltd. All rights reserved.</span>
           </div>
-          <p className="font-mono text-[10px] text-zinc-600 text-center md:text-right">
-            Securely Managed with Integrated Cloud Firestore Protocols • Confidentially Restricted Environment
-          </p>
+          <div className="flex items-center gap-4 text-[11px]">
+            <span className="hover:text-slate-800 transition cursor-pointer">Security Audit</span>
+            <span className="hover:text-slate-800 transition cursor-pointer">IQ Retail Live</span>
+            <span className="hover:text-slate-800 transition cursor-pointer">PayFast Gateway</span>
+          </div>
         </div>
       </footer>
-
     </div>
   );
 }
+

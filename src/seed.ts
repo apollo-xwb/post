@@ -1,63 +1,106 @@
-import { collection, getDocs, writeBatch, doc } from 'firebase/firestore';
-import { db } from './firebase';
-import { Product, PricingRule } from './types';
+import { doc, setDoc, getDoc, collection, writeBatch } from 'firebase/firestore';
+import { db } from './App';
 
-export const DEFAULT_PRODUCTS: Product[] = [
-  { id: 'prod_document', name: 'Quick Document Print', basePrice: 5.0, active: true, config: { sizes: ['A4', 'A3', 'A5'], stocks: ['80gsm', '90gsm', '120gsm'], finishes: ['Uncoated'] } },
-  { id: 'prod_flyer', name: 'Flyers', basePrice: 250.0, active: true, config: { sizes: ['A5', 'A4'], stocks: ['80gsm', '90gsm', '120gsm', '150gsm'], finishes: ['Uncoated', 'Gloss laminate'] } },
-  { id: 'prod_brochure', name: 'Brochures', basePrice: 380.0, active: true, config: { sizes: ['A4', 'A3'], stocks: ['120gsm', '150gsm', '170gsm'], finishes: ['Uncoated', 'Gloss laminate', 'Matt laminate'] } },
-  { id: 'prod_banner', name: 'Banners', basePrice: 450.0, active: true, config: { sizes: ['custom', 'A1', 'A2'], stocks: ['350gsm'], finishes: ['Uncoated'] } },
-  { id: 'prod_poster', name: 'Posters', basePrice: 190.0, active: true, config: { sizes: ['A2', 'A1', 'A0'], stocks: ['150gsm', '170gsm', '250gsm'], finishes: ['Uncoated', 'Gloss laminate', 'Matt laminate'] } },
-  { id: 'prod_letterhead', name: 'Letterheads', basePrice: 220.0, active: true, config: { sizes: ['A4'], stocks: ['80gsm', '90gsm', '120gsm'], finishes: ['Uncoated'] } },
-  { id: 'prod_ncrbook', name: 'NCR Books', basePrice: 280.0, active: true, config: { sizes: ['A4', 'A5'], stocks: ['80gsm'], finishes: ['Uncoated'] } },
-  { id: 'prod_custom', name: 'Custom Prints', basePrice: 100.0, active: true, config: { sizes: ['A4', 'A5', 'A6', 'A3', 'A2', 'A1', 'custom'], stocks: ['80gsm', '90gsm', '120gsm', '150gsm', '170gsm', '250gsm', '300gsm', '350gsm'], finishes: ['Uncoated', 'Gloss laminate', 'Matt laminate', 'Soft touch', 'UV spot'] } }
-];
-
-export const DEFAULT_PRICING_RULES: PricingRule[] = [
-  // Paper stock
-  { id: 'rule_stock_80', productId: 'global', ruleType: 'paper_stock', key: '80gsm', multiplier: 1.0 },
-  { id: 'rule_stock_90', productId: 'global', ruleType: 'paper_stock', key: '90gsm', multiplier: 1.05 },
-  { id: 'rule_stock_120', productId: 'global', ruleType: 'paper_stock', key: '120gsm', multiplier: 1.15 },
-  { id: 'rule_stock_150', productId: 'global', ruleType: 'paper_stock', key: '150gsm', multiplier: 1.25 },
-  { id: 'rule_stock_170', productId: 'global', ruleType: 'paper_stock', key: '170gsm', multiplier: 1.35 },
-  { id: 'rule_stock_250', productId: 'global', ruleType: 'paper_stock', key: '250gsm', multiplier: 1.5 },
-  { id: 'rule_stock_300', productId: 'global', ruleType: 'paper_stock', key: '300gsm', multiplier: 1.65 },
-  { id: 'rule_stock_350', productId: 'global', ruleType: 'paper_stock', key: '350gsm', multiplier: 1.8 },
-
-  // Finishes
-  { id: 'rule_finish_uncoated', productId: 'global', ruleType: 'finish', key: 'Uncoated', multiplier: 1.0 },
-  { id: 'rule_finish_gloss', productId: 'global', ruleType: 'finish', key: 'Gloss laminate', multiplier: 1.2 },
-  { id: 'rule_finish_matt', productId: 'global', ruleType: 'finish', key: 'Matt laminate', multiplier: 1.25 },
-  { id: 'rule_finish_soft', productId: 'global', ruleType: 'finish', key: 'Soft touch', multiplier: 1.4 },
-  { id: 'rule_finish_uv', productId: 'global', ruleType: 'finish', key: 'UV spot', multiplier: 1.5 },
-
-  // Turnaround
-  { id: 'rule_turn_standard', productId: 'global', ruleType: 'turnaround', key: 'Standard (3–5 days)', multiplier: 1.0 },
-  { id: 'rule_turn_express', productId: 'global', ruleType: 'turnaround', key: 'Express (next day)', multiplier: 1.5 },
-  { id: 'rule_turn_sameday', productId: 'global', ruleType: 'turnaround', key: 'Same day (premium)', multiplier: 2.0 }
-];
-
-export async function seedDatabaseIfEmpty() {
+export async function seedDatabase() {
   try {
-    const productsSnap = await getDocs(collection(db, 'products'));
-    if (productsSnap.empty) {
-      console.log('Seeding products catalog...');
-      const batch = writeBatch(db);
-      
-      DEFAULT_PRODUCTS.forEach((p) => {
-        const docRef = doc(db, 'products', p.id);
-        batch.set(docRef, p);
-      });
-
-      DEFAULT_PRICING_RULES.forEach((r) => {
-        const docRef = doc(db, 'pricing_rules', r.id);
-        batch.set(docRef, r);
-      });
-
-      await batch.commit();
-      console.log('Seeding completed successfully!');
+    // Check if seeding has already been done
+    const checkDoc = await getDoc(doc(db, 'products', 'prod_document'));
+    if (checkDoc.exists()) {
+      console.log('Database already seeded with products.');
+      return;
     }
-  } catch (err) {
-    console.error('Error seeding database:', err);
+
+    console.log('Seeding products and pricing rules to Firestore...');
+    const batch = writeBatch(db);
+
+    // 1. Products
+    const products = [
+      {
+        id: 'prod_document',
+        name: 'Documents & Manuscripts',
+        basePrice: 1.50, // 1.50 ZAR per page standard
+        active: true,
+        config: {
+          sizes: ['A4', 'A5', 'letter']
+        }
+      },
+      {
+        id: 'prod_poster',
+        name: 'High-Gloss Posters',
+        basePrice: 45.00, // 45.00 ZAR base
+        active: true,
+        config: {
+          sizes: ['A3', 'A2', 'A1', 'A0']
+        }
+      },
+      {
+        id: 'prod_flyer',
+        name: 'Marketing Flyers',
+        basePrice: 2.20, // 2.20 ZAR base
+        active: true,
+        config: {
+          sizes: ['A4', 'A5', 'A6']
+        }
+      },
+      {
+        id: 'prod_bizcard',
+        name: 'Premium Business Cards',
+        basePrice: 150.00, // 150.00 ZAR base for a pack of 100
+        active: true,
+        config: {
+          sizes: ['standard_biz', 'square_biz']
+        }
+      }
+    ];
+
+    for (const p of products) {
+      batch.set(doc(db, 'products', p.id), p);
+    }
+
+    // 2. Pricing Rules
+    const rules = [
+      // Documents & Manuscripts rules
+      { id: 'rule_doc_paper_80g', productId: 'prod_document', ruleType: 'paper_stock', key: '80gsm', multiplier: 1.0 },
+      { id: 'rule_doc_paper_120g', productId: 'prod_document', ruleType: 'paper_stock', key: '120gsm', multiplier: 1.5 },
+      { id: 'rule_doc_finish_none', productId: 'prod_document', ruleType: 'finish', key: 'None', multiplier: 1.0 },
+      { id: 'rule_doc_finish_staple', productId: 'prod_document', ruleType: 'finish', key: 'Stapled', multiplier: 1.1 },
+      { id: 'rule_doc_finish_bind', productId: 'prod_document', ruleType: 'finish', key: 'Spiral Bound', multiplier: 2.0 },
+      
+      // Posters rules
+      { id: 'rule_post_paper_150g', productId: 'prod_poster', ruleType: 'paper_stock', key: '150gsm Matte', multiplier: 1.0 },
+      { id: 'rule_post_paper_200g', productId: 'prod_poster', ruleType: 'paper_stock', key: '200gsm Glossy', multiplier: 1.4 },
+      { id: 'rule_post_finish_none', productId: 'prod_poster', ruleType: 'finish', key: 'None', multiplier: 1.0 },
+      { id: 'rule_post_finish_lam', productId: 'prod_poster', ruleType: 'finish', key: 'Laminated', multiplier: 1.5 },
+
+      // Flyers rules
+      { id: 'rule_fly_paper_120g', productId: 'prod_flyer', ruleType: 'paper_stock', key: '120gsm Gloss', multiplier: 1.0 },
+      { id: 'rule_fly_paper_170g', productId: 'prod_flyer', ruleType: 'paper_stock', key: '170gsm Silk', multiplier: 1.3 },
+      { id: 'rule_fly_finish_none', productId: 'prod_flyer', ruleType: 'finish', key: 'None', multiplier: 1.0 },
+      { id: 'rule_fly_finish_uv', productId: 'prod_flyer', ruleType: 'finish', key: 'UV Coated', multiplier: 1.5 },
+
+      // Business Cards rules
+      { id: 'rule_biz_paper_350g', productId: 'prod_bizcard', ruleType: 'paper_stock', key: '350gsm Silk', multiplier: 1.0 },
+      { id: 'rule_biz_paper_400g', productId: 'prod_bizcard', ruleType: 'paper_stock', key: '400gsm Luxury', multiplier: 1.5 },
+      { id: 'rule_biz_finish_none', productId: 'prod_bizcard', ruleType: 'finish', key: 'None', multiplier: 1.0 },
+      { id: 'rule_biz_finish_matte', productId: 'prod_bizcard', ruleType: 'finish', key: 'Matte Lamination', multiplier: 1.2 },
+      { id: 'rule_biz_finish_spotuv', productId: 'prod_bizcard', ruleType: 'finish', key: 'Spot UV Accent', multiplier: 1.8 },
+
+      // Turnaround multiplier rules
+      { id: 'rule_turn_std', productId: 'all', ruleType: 'turnaround', key: 'standard', multiplier: 1.0 },
+      { id: 'rule_turn_exp', productId: 'all', ruleType: 'turnaround', key: 'express', multiplier: 1.3 },
+      { id: 'rule_turn_rush', productId: 'all', ruleType: 'turnaround', key: 'rush', multiplier: 1.6 }
+    ];
+
+    for (const r of rules) {
+      batch.set(doc(db, 'pricing_rules', r.id), r);
+    }
+
+    // Write a local seed marker to Firestore config
+    batch.set(doc(db, 'config', 'seed_marker'), { seeded: true, timestamp: new Date() });
+
+    await batch.commit();
+    console.log('Firestore Database successfully seeded.');
+  } catch (error) {
+    console.error('Failed to seed Firestore database:', error);
   }
 }

@@ -59,7 +59,8 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
   }, []);
 
   // Set up high-contrast premium demo logins for testing
-  const handleQuickDemoLogin = async (role: UserRole) => {
+  const handleQuickDemoLogin = async (role: UserRole | 'customer' | 'staff' | 'admin') => {
+
     setLoading(true);
     setError(null);
     const demoEmail = role === 'staff' ? 'staff@postnet.co.za' : 'customer@company.co.za';

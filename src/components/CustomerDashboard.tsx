@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, where, onSnapshot, doc, getDocs } from 'firebase/firestore';
 import { UserProfile, Order, OrderFile, StatusHistory } from '../types';
+import InvoiceModal from './InvoiceModal';
 import { 
   Printer, 
   FileText, 
@@ -22,8 +23,10 @@ import {
   PackageOpen
 } from 'lucide-react';
 
+import { Search, RefreshCw, Truck } from 'lucide-react';
+
 interface CustomerDashboardProps {
-  user: UserProfile;
+  user: UserProfile | null;
   onNavigateToBuilder: () => void;
   selectedOrderIdOnCreate?: string | null;
 }
@@ -44,18 +47,24 @@ export default function CustomerDashboard({ user, onNavigateToBuilder, selectedO
   const [selectedOrderLogs, setSelectedOrderLogs] = useState<StatusHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [copying, setCopying] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [searchIdInput, setSearchIdInput] = useState('');
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
-  // Read orders list matching the signed in customer
+  // Read orders list matching the signed in customer or recent session
   useEffect(() => {
     setLoading(true);
-    const q = query(collection(db, 'orders'), where('userId', '==', user.id));
+    const userId = user?.id || 'guest-client';
+    const q = query(collection(db, 'orders'), where('userId', '==', userId));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const ordersArr: Order[] = [];
       snapshot.forEach(doc => {
         ordersArr.push(doc.data() as Order);
       });
-      // Sort newest first
+
+      // Also retrieve all public/recent orders if user is guest so they can track
       ordersArr.sort((a,b) => {
         const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
         const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
@@ -66,19 +75,80 @@ export default function CustomerDashboard({ user, onNavigateToBuilder, selectedO
       
       // Auto select current order on redirect or default to the most recent one
       if (selectedOrderIdOnCreate) {
-        const found = ordersArr.find(o => o.id === selectedOrderIdOnCreate);
-        if (found) setSelectedOrder(found);
+        handleLookupOrder(selectedOrderIdOnCreate);
       } else if (ordersArr.length > 0 && !selectedOrder) {
         setSelectedOrder(ordersArr[0]);
       }
       setLoading(false);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'orders');
-      setLoading(false);
+      // Fallback: search all recent orders
+      const allQ = query(collection(db, 'orders'));
+      onSnapshot(allQ, (snap) => {
+        const arr: Order[] = [];
+        snap.forEach(d => arr.push(d.data() as Order));
+        arr.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setOrders(arr);
+        if (selectedOrderIdOnCreate) {
+          const found = arr.find(o => o.id === selectedOrderIdOnCreate);
+          if (found) setSelectedOrder(found);
+        } else if (arr.length > 0 && !selectedOrder) {
+          setSelectedOrder(arr[0]);
+        }
+        setLoading(false);
+      });
     });
 
     return () => unsubscribe();
-  }, [user.id, selectedOrderIdOnCreate]);
+  }, [user?.id, selectedOrderIdOnCreate]);
+
+  // Real-time listener for live status updates from Staff on selectedOrder
+  useEffect(() => {
+    if (!selectedOrder?.id) return;
+    const unsubscribeDoc = onSnapshot(doc(db, 'orders', selectedOrder.id), (docSnap) => {
+      if (docSnap.exists()) {
+        const updated = docSnap.data() as Order;
+        setSelectedOrder(updated);
+      }
+    });
+    return () => unsubscribeDoc();
+  }, [selectedOrder?.id]);
+
+  // Handle direct Order ID lookup
+  const handleLookupOrder = async (searchId: string) => {
+    const cleanId = searchId.trim();
+    if (!cleanId) return;
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    try {
+      const docRef = doc(db, 'orders', cleanId);
+      const snap = await getDocs(query(collection(db, 'orders'), where('id', '==', cleanId)));
+      
+      if (!snap.empty) {
+        const found = snap.docs[0].data() as Order;
+        setSelectedOrder(found);
+        setOrders(prev => prev.some(o => o.id === found.id) ? prev : [found, ...prev]);
+        setSearchIdInput('');
+      } else {
+        // Try direct document ID search
+        const singleSnap = await getDocs(collection(db, 'orders'));
+        const directMatch = singleSnap.docs.map(d => d.data() as Order).find(o => o.id.toLowerCase() === cleanId.toLowerCase() || o.iqInvoiceId?.toLowerCase() === cleanId.toLowerCase());
+        
+        if (directMatch) {
+          setSelectedOrder(directMatch);
+          setOrders(prev => prev.some(o => o.id === directMatch.id) ? prev : [directMatch, ...prev]);
+          setSearchIdInput('');
+        } else {
+          setSearchError(`Order ID or Invoice "${cleanId}" not found in PostNet database.`);
+        }
+      }
+    } catch (err) {
+      setSearchError("Failed to query order. Please check your reference code.");
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   // Read subcollection of file entries and history logs for selected order
   useEffect(() => {
@@ -212,22 +282,56 @@ export default function CustomerDashboard({ user, onNavigateToBuilder, selectedO
       <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
         <div>
           <h2 className="text-2xl font-extrabold text-brand-dark flex items-center space-x-2">
-            <ClipboardCheck className="h-6 w-6 text-brand-cyan" />
-            <span>Customer Command Desk</span>
+            <Truck className="h-6 w-6 text-rose-600" />
+            <span>Order Tracker & Tax Invoice Portal</span>
           </h2>
           <p className="text-xs text-zinc-500">
-            Submit designs, review quotation line items, and track machinery processing milestones
+            Track pre-press progress, live production stages, and generate official SARS-compliant Tax Invoices
           </p>
         </div>
 
-        <button
-          onClick={onNavigateToBuilder}
-          className="py-2.5 px-5 bg-brand-cyan hover:bg-brand-cyan/95 hover:scale-103 transition-all text-white font-bold rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 cursor-pointer"
-        >
-          <Printer className="h-4 w-4" />
-          <span>Launch New Print Job Spec</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Live Order Lookup Input */}
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleLookupOrder(searchIdInput);
+            }}
+            className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl p-1 shadow-xs"
+          >
+            <Search className="w-4 h-4 text-slate-400 ml-2" />
+            <input
+              type="text"
+              placeholder="Search Order ID (e.g. PNX-...)"
+              value={searchIdInput}
+              onChange={(e) => setSearchIdInput(e.target.value)}
+              className="text-xs px-2 py-1 outline-none w-48 sm:w-56 font-mono text-slate-800"
+            />
+            <button
+              type="submit"
+              disabled={isSearching}
+              className="bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition"
+            >
+              {isSearching ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Track'}
+            </button>
+          </form>
+
+          <button
+            onClick={onNavigateToBuilder}
+            className="py-2 px-4 bg-rose-600 hover:bg-rose-700 transition-all text-white font-bold rounded-xl text-xs shadow-md flex items-center justify-center space-x-1.5 cursor-pointer"
+          >
+            <Printer className="h-4 w-4" />
+            <span>New Print Spec</span>
+          </button>
+        </div>
       </div>
+
+      {searchError && (
+        <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl text-xs font-mono flex items-center justify-between">
+          <span>{searchError}</span>
+          <button onClick={() => setSearchError(null)} className="font-bold underline">Dismiss</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-12">
@@ -416,19 +520,28 @@ export default function CustomerDashboard({ user, onNavigateToBuilder, selectedO
                     )}
 
                     <div className="border-t pt-4 space-y-2">
-                      <h4 className="text-xs font-extrabold uppercase tracking-wide text-zinc-400 flex items-center space-x-1 font-mono">
-                        <Barcode className="h-3.5 w-3.5 text-brand-cyan" />
-                        <span>Tax Invoice Receipt (ZAR)</span>
-                      </h4>
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-extrabold uppercase tracking-wide text-zinc-400 flex items-center space-x-1 font-mono">
+                          <Barcode className="h-3.5 w-3.5 text-brand-cyan" />
+                          <span>Tax Invoice Receipt (ZAR)</span>
+                        </h4>
+                        <button
+                          onClick={() => setShowInvoiceModal(true)}
+                          className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-2.5 py-1 rounded-lg flex items-center gap-1 transition shadow-xs"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>View Official Invoice</span>
+                        </button>
+                      </div>
 
                       <div className="space-y-1.5 text-xs text-slate-600">
                         <div className="flex justify-between">
                           <span>Subtotal (Excl. VAT):</span>
-                          <span className="font-medium font-mono">R{selectedOrder.subtotal.toFixed(2)}</span>
+                          <span className="font-medium font-mono">R{(selectedOrder.subtotal || selectedOrder.totalPrice / 1.15).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>VAT (15% Postnet collection):</span>
-                          <span className="font-medium font-mono">R{selectedOrder.vat.toFixed(2)}</span>
+                          <span className="font-medium font-mono">R{(selectedOrder.vat || selectedOrder.totalPrice - (selectedOrder.totalPrice / 1.15)).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between border-t border-slate-200 pt-1.5 text-sm font-extrabold text-slate-800">
                           <span>Total Paid:</span>
@@ -475,6 +588,13 @@ export default function CustomerDashboard({ user, onNavigateToBuilder, selectedO
 
         </div>
       )}
+
+      {/* Invoice Modal */}
+      <InvoiceModal
+        isOpen={showInvoiceModal}
+        onClose={() => setShowInvoiceModal(false)}
+        order={selectedOrder}
+      />
 
     </div>
   );
