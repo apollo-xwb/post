@@ -585,14 +585,14 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
             disabled={loading}
             className="w-full py-2.5 px-3 border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
-            <span>Client (PIN 0000)</span>
+            <span>Client Access</span>
           </button>
           <button
             onClick={() => handleQuickDemoLogin('staff')}
             disabled={loading}
             className="w-full py-2.5 px-3 border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
           >
-            <span>Staff (PIN 8034)</span>
+            <span>Staff Portal</span>
           </button>
         </div>
 

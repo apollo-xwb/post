@@ -92,11 +92,18 @@ export default function App() {
 
   // Handle Logo 5 Taps Secret Trigger
   const handleLogoClick = () => {
+    // Single tap always takes user to homepage
+    setCurrentView('customer');
+
     setLogoClickCount((prev) => {
       const next = prev + 1;
       if (next >= 5) {
-        setShowPinModal(true);
-        setPinModalError(null);
+        if (profile?.role === 'staff' || profile?.role === 'admin') {
+          setCurrentView('staff');
+        } else {
+          setShowPinModal(true);
+          setPinModalError(null);
+        }
         return 0;
       }
       return next;
@@ -104,7 +111,7 @@ export default function App() {
 
     setTimeout(() => {
       setLogoClickCount(0);
-    }, 3000);
+    }, 2500);
   };
 
   const handleVerifyPinAndUnlock = (e: React.FormEvent) => {
@@ -129,7 +136,7 @@ export default function App() {
         id: 'customer_' + Math.random().toString(36).substring(2, 9),
         email: 'customer@postnet.co.za',
         role: 'customer',
-        name: 'VIP Client (' + pin + ')',
+        name: 'VIP Client',
         createdAt: new Date().toISOString()
       };
       setProfile(updatedProfile);
@@ -137,7 +144,7 @@ export default function App() {
       setPinModalInput('');
       setPinModalError(null);
     } else {
-      setPinModalError("Enter 4-digit PIN (Use 8034 for Staff, 0000 for Customer)");
+      setPinModalError("Invalid PIN code. Please check and try again.");
     }
   };
 
@@ -208,11 +215,6 @@ export default function App() {
                 alt="PNX by Postnet Rondebosch" 
                 className="h-8 sm:h-9 w-auto object-contain transition active:scale-95"
               />
-              {logoClickCount > 0 && (
-                <span className="bg-rose-600 text-white font-mono text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
-                  {logoClickCount}/5
-                </span>
-              )}
             </div>
 
             {/* Center Navigation Links - Compact, uncluttered tabs */}
@@ -347,7 +349,7 @@ export default function App() {
               </div>
               <h3 className="text-lg font-bold font-display text-slate-900">PostNet Portal Access PIN</h3>
               <p className="text-xs text-slate-500">
-                Enter your 4-digit PIN code (Use <strong>8034</strong> for Staff Queue or <strong>0000</strong> for Instant Client Access).
+                Enter your security PIN code to access your workspace.
               </p>
             </div>
 
@@ -357,7 +359,7 @@ export default function App() {
                   type="password"
                   value={pinModalInput}
                   onChange={(e) => setPinModalInput(e.target.value)}
-                  placeholder="Enter PIN (e.g. 8034 or 0000)"
+                  placeholder="Enter PIN"
                   className="w-full text-center text-lg font-mono tracking-widest p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-rose-500"
                   autoFocus
                 />

@@ -294,7 +294,7 @@ export default function StaffDashboard({ user, profile }: StaffDashboardProps) {
       setIsAdminUnlocked(true);
       setPinError(null);
     } else {
-      setPinError("Invalid Admin Passcode/PIN. Default PIN is 8034.");
+      setPinError("Invalid Admin Passcode/PIN.");
     }
   };
 
@@ -441,7 +441,7 @@ export default function StaffDashboard({ user, profile }: StaffDashboardProps) {
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>Admin & Profiles (8034)</span>
+          <span>Admin & Profiles</span>
         </button>
 
         <button
@@ -640,10 +640,10 @@ export default function StaffDashboard({ user, profile }: StaffDashboardProps) {
 
             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
               <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                <Lock className="w-4 h-4 text-amber-600" /> 3. Security Passcode & Secret Access (PIN: 8034)
+                <Lock className="w-4 h-4 text-amber-600" /> 3. Security Passcode & Secret Access
               </h3>
               <p className="text-slate-600">
-                The Staff View is accessible by tapping the PostNet (PNX) header logo 5 times in rapid succession or authenticating with Admin PIN <strong>8034</strong>.
+                The Staff View is accessible by tapping the PostNet (PNX) header logo 5 times in rapid succession or authenticating with your Admin PIN.
               </p>
             </div>
           </div>
@@ -748,7 +748,6 @@ export default function StaffDashboard({ user, profile }: StaffDashboardProps) {
               <div>
                 <h3 className="text-lg font-bold font-display text-slate-900">Admin Security Verification</h3>
                 <p className="text-xs text-slate-500 mt-1">Enter your Admin PIN/Passcode to access RBAC user profile management.</p>
-                <p className="text-[11px] font-mono text-rose-600 mt-0.5 font-bold">(Default Admin PIN is 8034)</p>
               </div>
 
               <form onSubmit={handleVerifyAdminPin} className="max-w-xs mx-auto space-y-3">
@@ -756,7 +755,7 @@ export default function StaffDashboard({ user, profile }: StaffDashboardProps) {
                   type="password"
                   value={adminPinInput}
                   onChange={(e) => setAdminPinInput(e.target.value)}
-                  placeholder="Enter Admin PIN (e.g. 8034)"
+                  placeholder="Enter Admin PIN"
                   className="w-full text-center text-sm font-mono tracking-widest p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500"
                 />
                 {pinError && <p className="text-xs text-rose-600 font-medium">{pinError}</p>}
