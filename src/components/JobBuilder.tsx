@@ -4,10 +4,22 @@ import { db } from '../App';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { Order, OrderFile } from '../types';
 import PayFastModal from './PayFastModal';
-import { 
-  FileText, Image as ImageIcon, Sliders, UploadCloud, CheckCircle, 
-  ChevronRight, ChevronLeft, Sparkles, RefreshCw, AlertCircle, ShoppingBag,
-  CreditCard, Store, Lock, ArrowRight, RotateCw, ZoomIn, Info, HelpCircle
+import {
+  bindingMultiplier,
+  bindingOptionsForProduct,
+  defaultStockForSize,
+  MAX_COPY_QUANTITY,
+  normalizePaperSizeFromLabel,
+  paperStocksForSize,
+  sizeOptionsForProduct,
+  weightMultiplier as stockWeightMultiplier,
+} from '../lib/printOptions';
+import { isPayFastConfigured } from '../lib/payfast';
+import { subscribePayFastReturn } from '../hooks/usePayFastReturn';
+import {
+  FileText, Image as ImageIcon, UploadCloud, CheckCircle,
+  ChevronRight, ChevronLeft, Sparkles, ShoppingBag,
+  CreditCard, RotateCw, ZoomIn, Minus, Plus,
 } from 'lucide-react';
 
 interface JobBuilderProps {
@@ -52,12 +64,13 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
   // Specs State
   const [selectedProduct, setSelectedProduct] = useState<'document' | 'poster' | 'flyer' | 'booklet'>('document');
   const [paperSize, setPaperSize] = useState<string>('A4');
-  const [paperWeight, setPaperWeight] = useState<string>('80gsm');
+  const [paperWeight, setPaperWeight] = useState<string>('80gr bond paper');
   const [finish, setFinish] = useState<string>('None');
   const [sides, setSides] = useState<'single' | 'double'>('single');
   const [colorMode, setColorMode] = useState<'color' | 'grayscale'>('color');
-  const [turnaround, setTurnaround] = useState<'standard' | 'express' | 'rush'>('standard');
-  const [quantity, setQuantity] = useState<number>(50);
+  const turnaround = 'standard' as const;
+  const [quantity, setQuantity] = useState<number>(1);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
 
   // Pre-press Canvas Matrix State
   const [zoom, setZoom] = useState<number>(100);
@@ -79,38 +92,68 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
   const [pendingOrderId, setPendingOrderId] = useState<string>('');
   const [prices, setPrices] = useState({ subtotal: 0, vat: 0, total: 0 });
 
-  // Reset sizing and options based on product type choice
   useEffect(() => {
     if (selectedProduct === 'poster') {
       setPaperSize('A2');
-      setPaperWeight('150gsm Matte');
+      setPaperWeight(defaultStockForSize('A2'));
       setFinish('None');
-      setSides('single'); // Locked to single for posters
+      setSides('single');
     } else if (selectedProduct === 'flyer') {
       setPaperSize('A5');
-      setPaperWeight('120gsm Gloss');
+      setPaperWeight(defaultStockForSize('A5'));
       setFinish('None');
       setSides('single');
     } else if (selectedProduct === 'booklet') {
       setPaperSize('A4');
-      setPaperWeight('120gsm');
-      setFinish('Spiral Bound');
+      setPaperWeight(defaultStockForSize('A4'));
+      setFinish('Plastic Ring Binding');
       setSides('double');
     } else {
       setPaperSize('A4');
-      setPaperWeight('80gsm');
+      setPaperWeight(defaultStockForSize('A4'));
       setFinish('None');
       setSides('single');
     }
   }, [selectedProduct]);
 
+  useEffect(() => {
+    const stocks = paperStocksForSize(paperSize);
+    if (!stocks.includes(paperWeight)) {
+      setPaperWeight(stocks[0]);
+    }
+    const bindings = bindingOptionsForProduct(selectedProduct);
+    if (!(bindings as readonly string[]).includes(finish)) {
+      setFinish(bindings[0]);
+    }
+  }, [paperSize, selectedProduct, paperWeight, finish]);
+
+  useEffect(() => {
+    return subscribePayFastReturn((result) => {
+      if (result.outcome === 'paid') {
+        setOrderSubmitted(result.orderId);
+        setPaymentRef(result.payfastRef || result.order?.payfastPaymentId || null);
+        setPaymentMessage(null);
+        setIsPayFastOpen(false);
+      } else if (result.outcome === 'cancelled') {
+        setPaymentMessage('Payment was cancelled. Your order remains unpaid — you can try PayFast again from checkout.');
+        setIsPayFastOpen(false);
+      } else if (result.outcome === 'failed') {
+        setPaymentMessage('Payment failed. Your order remains unpaid.');
+        setIsPayFastOpen(false);
+      } else if (result.outcome === 'pending') {
+        setPaymentMessage(
+          'Payment is still being confirmed. If you completed PayFast, please wait a moment or check order tracking.'
+        );
+      }
+    });
+  }, []);
+
   // Price Calculation Engine
   useEffect(() => {
     let basePrice = 1.50; // Documents
     let sizeMultiplier = 1.0;
-    let weightMultiplier = 1.0;
-    let finishMultiplier = 1.0;
-    let turnMultiplier = 1.0;
+    let finishMultiplier = bindingMultiplier(finish);
+    const weightMultiplier = stockWeightMultiplier(paperWeight);
 
     if (selectedProduct === 'poster') {
       basePrice = 45.00;
@@ -118,37 +161,27 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
       if (paperSize === 'A2') sizeMultiplier = 1.5;
       if (paperSize === 'A1') sizeMultiplier = 2.2;
       if (paperSize === 'A0') sizeMultiplier = 3.5;
-
-      if (paperWeight.includes('200gsm')) weightMultiplier = 1.4;
-      if (finish === 'Laminated') finishMultiplier = 1.5;
     } else if (selectedProduct === 'flyer') {
       basePrice = 2.20;
       if (paperSize === 'A4') sizeMultiplier = 1.4;
       if (paperSize === 'A5') sizeMultiplier = 1.0;
       if (paperSize === 'A6') sizeMultiplier = 0.8;
-
-      if (paperWeight.includes('170gsm')) weightMultiplier = 1.3;
-      if (finish === 'UV Coated') finishMultiplier = 1.5;
+      if (paperSize === 'A3') sizeMultiplier = 1.6;
     } else if (selectedProduct === 'booklet') {
       basePrice = 12.50;
       if (paperSize === 'A4') sizeMultiplier = 1.2;
       if (paperSize === 'A5') sizeMultiplier = 1.0;
-      if (finish === 'Spiral Bound') finishMultiplier = 1.5;
+      if (paperSize === 'A6') sizeMultiplier = 0.85;
+      if (paperSize === 'A3') sizeMultiplier = 1.35;
     } else {
-      // Documents
       if (paperSize === 'A4') sizeMultiplier = 1.0;
       if (paperSize === 'A5') sizeMultiplier = 0.8;
-      if (paperSize === 'letter') sizeMultiplier = 1.1;
-
-      if (paperWeight.includes('120gsm')) weightMultiplier = 1.5;
-      if (finish === 'Stapled') finishMultiplier = 1.1;
-      if (finish === 'Spiral Bound') finishMultiplier = 2.0;
+      if (paperSize === 'A6') sizeMultiplier = 0.7;
+      if (paperSize === 'A3') sizeMultiplier = 1.3;
     }
 
     const sidesMultiplier = sides === 'double' ? 1.7 : 1.0;
-
-    if (turnaround === 'express') turnMultiplier = 1.3;
-    if (turnaround === 'rush') turnMultiplier = 1.6;
+    const turnMultiplier = 1.0;
 
     let qtyDiscount = 1.0;
     if (quantity >= 500) qtyDiscount = 0.8;
@@ -211,10 +244,8 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
     setIsGrayscaleFilter(false);
   };
 
-  // Submit Order Routine
-  const createOrderRecord = async (isPaidDirect: boolean, payRef?: string) => {
+  const savePendingOrder = async (orderId: string) => {
     setIsSubmitting(true);
-    const orderId = pendingOrderId || 'PNX_' + Math.random().toString(36).substring(2, 10).toUpperCase();
     const guestUserId = user ? user.uid : 'local_guest_' + Math.random().toString(36).substring(2, 8);
 
     const newOrder: Order = {
@@ -240,9 +271,10 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
           grayscale: isGrayscaleFilter
         }
       },
-      paymentStatus: isPaidDirect ? 'paid' : 'unpaid',
+      paymentStatus: 'pending',
+      paymentMethod: 'PayFast',
       iqSyncStatus: 'pending',
-      staffNote: isPaidDirect ? `PayFast Approved (Ref: ${payRef})` : 'Awaiting counter payment'
+      staffNote: 'Awaiting PayFast payment confirmation'
     };
 
     const newFile: OrderFile = {
@@ -257,23 +289,32 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
     try {
       await setDoc(doc(db, 'orders', orderId), newOrder);
       await setDoc(doc(db, 'orders', orderId, 'order_files', newFile.id), newFile);
-      setOrderSubmitted(orderId);
-      if (payRef) setPaymentRef(payRef);
+      return true;
     } catch (err) {
       console.warn("Offline order fallback:", err);
       localStorage.setItem(`offline_order_${orderId}`, JSON.stringify({ ...newOrder, file: newFile }));
-      setOrderSubmitted(orderId);
-      if (payRef) setPaymentRef(payRef);
+      return true;
     } finally {
       setIsSubmitting(false);
-      setIsPayFastOpen(false);
     }
   };
 
-  const handleInitiatePayFast = () => {
+  const handleInitiatePayFast = async () => {
+    if (!isPayFastConfigured()) {
+      setPaymentMessage('Online payment is not configured. Please contact PostNet Rondebosch to complete your order.');
+      return;
+    }
     const generatedId = 'PNX_' + Math.random().toString(36).substring(2, 10).toUpperCase();
     setPendingOrderId(generatedId);
-    setIsPayFastOpen(true);
+    setPaymentMessage(null);
+    const saved = await savePendingOrder(generatedId);
+    if (saved) {
+      setIsPayFastOpen(true);
+    }
+  };
+
+  const clampQuantity = (value: number) => {
+    return Math.min(MAX_COPY_QUANTITY, Math.max(1, Math.floor(value) || 1));
   };
 
   const totalSteps = 6;
@@ -285,10 +326,11 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
       <PayFastModal
         isOpen={isPayFastOpen}
         onClose={() => setIsPayFastOpen(false)}
-        onSuccess={(ref) => createOrderRecord(true, ref)}
         amount={prices.total}
         description={`${quantity}x ${selectedProduct.toUpperCase()} (${paperSize}, ${paperWeight})`}
         orderId={pendingOrderId}
+        payerEmail={profile?.email || user?.email}
+        payerName={profile?.name}
       />
 
       {orderSubmitted ? (
@@ -308,7 +350,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
             <div>
               <strong>Payment Status:</strong> {' '}
               <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${paymentRef ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                {paymentRef ? `Paid via PayFast (${paymentRef})` : 'Pay at Branch Counter'}
+                {paymentRef ? `Paid via PayFast (${paymentRef})` : 'Payment confirmed'}
               </span>
             </div>
           </div>
@@ -375,7 +417,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                     { id: 'document', label: 'Documents & Reports', desc: 'A4/A5 stapled manuals, invoices, & executive bond papers.', icon: FileText },
                     { id: 'poster', label: 'High-Gloss Posters', desc: 'A2, A1, A0 & A3 wide-format architectural/marketing prints.', icon: ImageIcon },
                     { id: 'flyer', label: 'Promo Flyers & Handouts', desc: 'A5/A6 glossy promo flyers and promotional leaflets.', icon: Sparkles },
-                    { id: 'booklet', label: 'Bound Booklets', desc: 'Multi-page booklets with heavy cover stock and spiral binding.', icon: ShoppingBag },
+                    { id: 'booklet', label: 'Bound Booklets', desc: 'Multi-page booklets with ring, wire, or glue binding.', icon: ShoppingBag },
                   ].map((p) => {
                     const Icon = p.icon;
                     return (
@@ -413,13 +455,14 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                 </div>
 
                 <PrintInsightCard 
-                  title="Understanding Paper Sizing & GSM Stock Density"
+                  title="Paper sizing & stock (A6–A3 vs A2–A0)"
                   content={
                     <ul className="list-disc pl-4 space-y-1">
-                      <li><strong>80gsm Bond (Laser)</strong>: Standard multi-page office copy paper. Light, flexible, cost-effective.</li>
-                      <li><strong>120gsm Executive / Matte</strong>: Premium smooth texture for formal proposals, letters, and resumes.</li>
-                      <li><strong>150gsm / 170gsm Silk & Gloss</strong>: Heavier satin paper ideal for double-sided promotional flyers & leaflets.</li>
-                      <li><strong>200gsm Heavy Cardstock</strong>: Rigid, opaque weight for high-gloss posters, covers, and framed graphics.</li>
+                      <li><strong>A6–A3</strong>: 80gr bond paper, 180gsm Matt, 180gsm Gloss, 300gsm Matt, or 300gsm Gloss.</li>
+                      <li><strong>A2–A0</strong>: 80gr bond paper, 170gsm Matt, or 170gsm Gloss.</li>
+                      <li><strong>80gr bond</strong>: Everyday copy and multi-page documents.</li>
+                      <li><strong>180/300gsm Matt & Gloss</strong>: Flyers, covers, and firm handouts (smaller sizes).</li>
+                      <li><strong>170gsm Matt & Gloss</strong>: Large-format posters and plans.</li>
                     </ul>
                   }
                 />
@@ -431,13 +474,8 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                       <span className="text-[10px] text-rose-600 font-mono font-bold uppercase">Required</span>
                     </label>
                     <div className="space-y-2">
-                      {(selectedProduct === 'poster' 
-                        ? ['A2 (420 x 594 mm)', 'A1 (594 x 841 mm)', 'A0 (841 x 1189 mm)', 'A3 (297 x 420 mm)']
-                        : selectedProduct === 'flyer'
-                        ? ['A5 (148 x 210 mm)', 'A4 (210 x 297 mm)', 'A6 (105 x 148 mm)']
-                        : ['A4 (210 x 297 mm)', 'A5 (148 x 210 mm)', 'Letter (215 x 279 mm)']
-                      ).map((sz) => {
-                        const code = sz.split(' ')[0];
+                      {sizeOptionsForProduct(selectedProduct).map((sz) => {
+                        const code = normalizePaperSizeFromLabel(sz);
                         return (
                           <button
                             key={sz}
@@ -463,12 +501,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                       <span className="text-[10px] text-rose-600 font-mono font-bold uppercase">Required</span>
                     </label>
                     <div className="space-y-2">
-                      {(selectedProduct === 'poster'
-                        ? ['150gsm Matte', '200gsm Glossy']
-                        : selectedProduct === 'flyer'
-                        ? ['120gsm Gloss', '170gsm Silk']
-                        : ['80gsm Bond (Laser)', '120gsm Executive Matte']
-                      ).map((wt) => (
+                      {paperStocksForSize(paperSize).map((wt) => (
                         <button
                           key={wt}
                           type="button"
@@ -498,28 +531,24 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                 </div>
 
                 <PrintInsightCard 
-                  title="Choosing Finishing Treatments & Palette Modes"
+                  title="Binding & colour modes"
                   content={
                     <ul className="list-disc pl-4 space-y-1">
-                      <li><strong>Plain / Unfinished</strong>: Standard clean guillotine trim with no secondary binding.</li>
-                      <li><strong>Stapled / Spiral Bound</strong>: Corner staple or heavy plastic coil coil-binding with protective clear acetate front covers.</li>
-                      <li><strong>Laminated / UV Coated</strong>: Gloss liquid or heat-sealed plastic coating providing water, tear, and fading protection.</li>
-                      <li><strong>CMYK Full Color</strong>: Vibrant 4-color high-definition laser printing for graphics, photos, and artwork.</li>
-                      <li><strong>Monochrome (B&W)</strong>: Fast laser grayscale output, ideal for text-heavy invoices & manuals.</li>
+                      <li><strong>None</strong>: Clean trim only — no binding.</li>
+                      <li><strong>Plastic Ring Binding</strong>: Durable comb binding for manuals and coursework.</li>
+                      <li><strong>Wire Binding</strong>: Metal twin-loop binding for presentations.</li>
+                      <li><strong>Glue Binding</strong>: Perfect-bound spine for thicker booklets.</li>
+                      <li><strong>CMYK Full Color</strong>: Full colour laser output for graphics and photos.</li>
+                      <li><strong>Monochrome</strong>: Grayscale for text-heavy documents.</li>
                     </ul>
                   }
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2">Finishing Options</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">Binding</label>
                     <div className="space-y-2">
-                      {(selectedProduct === 'poster'
-                        ? ['None', 'Laminated']
-                        : selectedProduct === 'flyer'
-                        ? ['None', 'UV Coated']
-                        : ['None', 'Stapled', 'Spiral Bound']
-                      ).map((f) => (
+                      {bindingOptionsForProduct(selectedProduct).map((f) => (
                         <button
                           key={f}
                           type="button"
@@ -530,7 +559,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                               : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
                           }`}
                         >
-                          <span>{f === 'None' ? 'Plain / Unfinished' : f}</span>
+                          <span>{f === 'None' ? 'No binding' : f}</span>
                           {finish === f && <CheckCircle className="w-4 h-4 text-rose-600" />}
                         </button>
                       ))}
@@ -599,17 +628,16 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-200">
                 <div>
                   <span className="text-xs font-mono font-bold text-rose-600 uppercase tracking-wider block mb-1">Question 4</span>
-                  <h2 className="text-xl sm:text-2xl font-bold font-display text-slate-900">How many copies and how fast do you need it?</h2>
+                  <h2 className="text-xl sm:text-2xl font-bold font-display text-slate-900">How many copies do you need?</h2>
                 </div>
 
                 <PrintInsightCard 
-                  title="Production Turnarounds & Quantity Tier Discounts"
+                  title="Turnaround & volume"
                   content={
                     <ul className="list-disc pl-4 space-y-1">
-                      <li><strong>Standard (2-3 Days)</strong>: Our best value rate for standard print scheduling.</li>
-                      <li><strong>Express (24 Hours)</strong>: Next-day dispatch priority for urgent meetings.</li>
-                      <li><strong>Rush Priority (3 Hours)</strong>: Emergency counter queue at PostNet Rondebosch.</li>
-                      <li><strong>Volume Tier Discounts</strong>: 200+ copies receive 10% off; 500+ copies receive 20% off automatically!</li>
+                      <li><strong>Turnaround</strong>: Standard production — ready before close of business on the production day.</li>
+                      <li><strong>Volume discounts</strong>: 200+ copies receive 10% off; 500+ copies receive 20% off.</li>
+                      <li><strong>Quantity</strong>: Enter any whole number of copies (minimum 1).</li>
                     </ul>
                   }
                 />
@@ -617,49 +645,44 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                 <div className="space-y-6 bg-slate-50 p-6 rounded-xl border border-slate-200">
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <label className="text-xs font-bold text-slate-800">Print Volume Quantity</label>
+                      <label className="text-xs font-bold text-slate-800" htmlFor="copy-quantity">Print volume</label>
                       <span className="font-mono text-sm font-bold text-rose-600 bg-rose-100 px-3 py-1 rounded-full">
-                        {quantity} copies
+                        {quantity} {quantity === 1 ? 'copy' : 'copies'}
                       </span>
                     </div>
-                    <input
-                      type="range"
-                      min="10"
-                      max="1000"
-                      step="10"
-                      value={quantity}
-                      onChange={(e) => setQuantity(parseInt(e.target.value))}
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-600"
-                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity((q) => clampQuantity(q - 1))}
+                        className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-100"
+                        aria-label="Decrease copies"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <input
+                        id="copy-quantity"
+                        type="number"
+                        min={1}
+                        max={MAX_COPY_QUANTITY}
+                        value={quantity}
+                        onChange={(e) => setQuantity(clampQuantity(parseInt(e.target.value, 10)))}
+                        className="flex-1 text-center font-mono font-bold text-sm border border-slate-200 rounded-lg py-2"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setQuantity((q) => clampQuantity(q + 1))}
+                        className="p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-100"
+                        aria-label="Increase copies"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
                     <span className="text-[10px] text-slate-500 block mt-1">Bulk tier discount: 200+ (10% off), 500+ (20% off).</span>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-2">Turnaround Speed</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      {[
-                        { id: 'standard', label: 'Standard (2-3 Days)', surge: 'Standard Rate' },
-                        { id: 'express', label: 'Express (24 Hours)', surge: '+30% Surge' },
-                        { id: 'rush', label: 'Rush Priority (3 Hours)', surge: '+60% Priority' },
-                      ].map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => setTurnaround(t.id as any)}
-                          className={`p-3 rounded-xl border text-left transition flex items-center justify-between ${
-                            turnaround === t.id
-                              ? 'border-rose-600 bg-rose-50 text-rose-900 font-bold shadow-xs'
-                              : 'border-slate-200 bg-white text-slate-700'
-                          }`}
-                        >
-                          <div>
-                            <span className="text-xs block font-bold">{t.label}</span>
-                            <span className="text-[10px] text-slate-500 font-mono block mt-0.5">{t.surge}</span>
-                          </div>
-                          {turnaround === t.id && <CheckCircle className="w-4 h-4 text-rose-600 shrink-0" />}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="p-3 rounded-xl border border-rose-200 bg-rose-50/50 text-xs text-slate-700">
+                    <span className="font-bold text-slate-900 block mb-0.5">Turnaround</span>
+                    Standard — ready before close of business (same-day scheduling subject to queue).
                   </div>
                 </div>
               </div>
@@ -833,7 +856,7 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-200">
                 <div>
                   <span className="text-xs font-mono font-bold text-rose-600 uppercase tracking-wider block mb-1">Step 6: Final Review</span>
-                  <h2 className="text-xl sm:text-2xl font-bold font-display text-slate-900">Review Quotation & Select Payment Method</h2>
+                  <h2 className="text-xl sm:text-2xl font-bold font-display text-slate-900">Review quotation & pay online</h2>
                 </div>
 
                 <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 text-xs space-y-3">
@@ -859,25 +882,24 @@ export default function JobBuilder({ user, profile, onNavigateToTracker }: JobBu
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <button
-                    onClick={handleInitiatePayFast}
-                    disabled={isSubmitting || !uploadedFile}
-                    className="bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 text-white p-4 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>Pay Now via PayFast Gateway</span>
-                  </button>
+                <button
+                  onClick={handleInitiatePayFast}
+                  disabled={isSubmitting || !uploadedFile}
+                  className="w-full bg-rose-600 hover:bg-rose-700 disabled:bg-slate-300 text-white p-4 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>{isSubmitting ? 'Saving order…' : 'Pay now with PayFast'}</span>
+                </button>
 
-                  <button
-                    onClick={() => createOrderRecord(false)}
-                    disabled={isSubmitting || !uploadedFile}
-                    className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white p-4 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <Store className="w-4 h-4" />
-                    <span>Order & Pay at Branch Counter</span>
-                  </button>
-                </div>
+                <p className="text-[11px] text-slate-500 text-center">
+                  Printing starts only after PayFast confirms your payment. Orders stay unpaid until then.
+                </p>
+
+                {paymentMessage && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-center font-medium">
+                    {paymentMessage}
+                  </p>
+                )}
 
                 {!uploadedFile && (
                   <p className="text-[11px] text-amber-600 bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-center font-medium">

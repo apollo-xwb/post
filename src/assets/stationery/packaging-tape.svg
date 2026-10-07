@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#f1f5f9"/>
+  <circle cx="200" cy="130" r="55" fill="#b45309" stroke="#78350f" stroke-width="2"/>
+  <circle cx="200" cy="130" r="22" fill="#f1f5f9"/>
+  <text x="200" y="230" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="700" fill="#0f172a">Packaging Tape</text>
+</svg>

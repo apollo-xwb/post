@@ -2,10 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../App';
 import { doc, setDoc } from 'firebase/firestore';
 import { StationeryItem, CartItem, Order } from '../types';
-import { 
-  ShoppingBag, Search, Plus, Minus, Trash2, CheckCircle2, 
-  Truck, Store, ShieldCheck, Tag, ArrowRight, X, AlertCircle, ShoppingCart
+import {
+  ShoppingBag, Search, Plus, Minus, Trash2, CheckCircle2,
+  Truck, Store, ArrowRight, X, ShoppingCart
 } from 'lucide-react';
+import imgPaper from '../assets/stationery/paper-a4-80.svg';
+import imgBox from '../assets/stationery/courier-box.svg';
+import imgTape from '../assets/stationery/packaging-tape.svg';
+import imgBubble from '../assets/stationery/bubble-wrap.svg';
+import imgMailer from '../assets/stationery/bubble-mailer.svg';
+import imgPens from '../assets/stationery/gel-pens.svg';
+import imgArch from '../assets/stationery/lever-arch.svg';
+import imgSleeves from '../assets/stationery/document-sleeves.svg';
 
 const STATIONERY_CATALOG: StationeryItem[] = [
   {
@@ -16,7 +24,7 @@ const STATIONERY_CATALOG: StationeryItem[] = [
     price: 95.00,
     stock: 450,
     description: 'High-whiteness premium 80gsm laser paper. Ideal for high-speed double-sided printing and crisp black-and-white or color documents (500 sheets).',
-    image: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&auto=format&fit=crop&q=60'
+    image: imgPaper
   },
   {
     id: 'stat_box_med',
@@ -26,7 +34,7 @@ const STATIONERY_CATALOG: StationeryItem[] = [
     price: 28.50,
     stock: 200,
     description: 'Heavy-duty 3-layer corrugated courier box (300 x 200 x 150mm) engineered for safe domestic parcel shipping and transit durability.',
-    image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&auto=format&fit=crop&q=60'
+    image: imgBox
   },
   {
     id: 'stat_tape_heavy',
@@ -36,7 +44,7 @@ const STATIONERY_CATALOG: StationeryItem[] = [
     price: 32.00,
     stock: 350,
     description: 'High-tack acrylic adhesive brown packaging tape. Holds firmly on cardboard boxes and heavy parcel wraps under all humidity conditions.',
-    image: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&auto=format&fit=crop&q=60'
+    image: imgTape
   },
   {
     id: 'stat_bubble_roll',
@@ -46,7 +54,7 @@ const STATIONERY_CATALOG: StationeryItem[] = [
     price: 65.00,
     stock: 120,
     description: '10mm air-bubble protective shock-absorption wrap for fragile electronics, glassware, and valuable parcel shipments.',
-    image: 'https://images.unsplash.com/photo-1607344645866-009c320c5ab8?w=500&auto=format&fit=crop&q=60'
+    image: imgBubble
   },
   {
     id: 'stat_mailers_a4',
@@ -56,7 +64,7 @@ const STATIONERY_CATALOG: StationeryItem[] = [
     price: 85.00,
     stock: 180,
     description: 'Self-sealing kraft paper envelopes lined with interior air bubble lining. Ideal for document and small goods protection.',
-    image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=500&auto=format&fit=crop&q=60'
+    image: imgMailer
   },
   {
     id: 'stat_pens_gel',
@@ -66,7 +74,7 @@ const STATIONERY_CATALOG: StationeryItem[] = [
     price: 145.00,
     stock: 95,
     description: 'Smooth 0.7mm quick-drying waterproof gel ink pens with comfortable ergonomic rubber grip for extended signature signing.',
-    image: 'https://images.unsplash.com/photo-1585336261026-61e778929b28?w=500&auto=format&fit=crop&q=60'
+    image: imgPens
   },
   {
     id: 'stat_file_arch',
@@ -76,7 +84,7 @@ const STATIONERY_CATALOG: StationeryItem[] = [
     price: 52.00,
     stock: 140,
     description: 'Durable polypropylene covered board with reinforced metal bottom edges and easy locking mechanism for archive filing.',
-    image: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop&q=60'
+    image: imgArch
   },
   {
     id: 'stat_sleeves_100',
@@ -86,7 +94,7 @@ const STATIONERY_CATALOG: StationeryItem[] = [
     price: 78.00,
     stock: 210,
     description: 'Copy-safe acid-free polypropylene punched pocket sleeves designed to fit standard 2-ring and 4-ring lever arch binders.',
-    image: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&auto=format&fit=crop&q=60'
+    image: imgSleeves
   }
 ];
 

@@ -67,7 +67,7 @@ service cloud.firestore {
         && data.productType.size() <= 128
         && data.quantity is number
         && data.quantity > 0
-        && data.paymentStatus in ['unpaid', 'paid'];
+        && data.paymentStatus in ['unpaid', 'paid', 'pending', 'cancelled', 'failed'];
     }
 
     function isValidOrderFile(data) {

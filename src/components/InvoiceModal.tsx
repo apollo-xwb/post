@@ -127,7 +127,11 @@ PostNet Rondebosch Branch (VAT: 4810293812)`;
                 <span className={`px-2.5 py-0.5 rounded text-[10px] uppercase font-bold font-mono ${
                   order.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                 }`}>
-                  {order.paymentStatus === 'paid' ? 'Paid in Full' : 'Unpaid / Counter Pay'}
+                  {order.paymentStatus === 'paid'
+                    ? 'Paid in Full'
+                    : order.paymentStatus === 'pending'
+                      ? 'Awaiting PayFast'
+                      : 'Unpaid'}
                 </span>
                 <span className="text-[11px] text-slate-500 font-mono">
                   {order.staffNote || 'Processed via PostNet Print OS'}
