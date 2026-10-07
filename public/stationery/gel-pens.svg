@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#f1f5f9"/>
+  <rect x="150" y="90" width="20" height="120" rx="4" fill="#1e293b"/>
+  <rect x="190" y="85" width="20" height="125" rx="4" fill="#334155"/>
+  <rect x="230" y="95" width="20" height="115" rx="4" fill="#0f172a"/>
+  <text x="200" y="250" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="700" fill="#0f172a">Gel Pens (Box)</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#f1f5f9"/>
+  <rect x="130" y="55" width="140" height="190" rx="4" fill="#be123c" stroke="#881337" stroke-width="2"/>
+  <rect x="155" y="75" width="90" height="12" rx="2" fill="#fecdd3"/>
+  <text x="200" y="270" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="700" fill="#0f172a">Lever Arch File</text>
+</svg>

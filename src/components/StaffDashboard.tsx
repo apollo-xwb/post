@@ -40,7 +40,7 @@ const INITIAL_CATALOG_ITEMS: StationeryItem[] = [
     price: 95.00,
     stock: 450,
     description: 'High-whiteness premium 80gsm laser paper.',
-    image: 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&auto=format&fit=crop&q=60'
+    image: '/stationery/paper-a4-80.svg'
   },
   {
     id: 'stat_box_med',
@@ -50,7 +50,7 @@ const INITIAL_CATALOG_ITEMS: StationeryItem[] = [
     price: 28.50,
     stock: 200,
     description: 'Heavy-duty 3-layer corrugated courier box.',
-    image: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&auto=format&fit=crop&q=60'
+    image: '/stationery/courier-box.svg'
   },
   {
     id: 'stat_tape_heavy',
@@ -60,7 +60,7 @@ const INITIAL_CATALOG_ITEMS: StationeryItem[] = [
     price: 32.00,
     stock: 350,
     description: 'High-tack acrylic brown packaging tape.',
-    image: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=500&auto=format&fit=crop&q=60'
+    image: '/stationery/packaging-tape.svg'
   },
   {
     id: 'stat_bubble_roll',
@@ -70,7 +70,7 @@ const INITIAL_CATALOG_ITEMS: StationeryItem[] = [
     price: 65.00,
     stock: 120,
     description: '10mm air-bubble protective shock-absorption wrap.',
-    image: 'https://images.unsplash.com/photo-1607344645866-009c320c5ab8?w=500&auto=format&fit=crop&q=60'
+    image: '/stationery/bubble-wrap.svg'
   }
 ];
 
@@ -103,7 +103,7 @@ export default function StaffDashboard({ user, profile }: StaffDashboardProps) {
   const [newItemSku, setNewItemSku] = useState('');
   const [newItemPrice, setNewItemPrice] = useState(50);
   const [newItemCategory, setNewItemCategory] = useState('Paper & Media');
-  const [newItemImageUrl, setNewItemImageUrl] = useState('https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&auto=format&fit=crop&q=60');
+  const [newItemImageUrl, setNewItemImageUrl] = useState('/stationery/paper-a4-80.svg');
 
   // Admin Security & User Management States
   const [adminPinInput, setAdminPinInput] = useState('');
@@ -363,7 +363,7 @@ export default function StaffDashboard({ user, profile }: StaffDashboardProps) {
       price: newItemPrice,
       stock: 100,
       description: 'Staff added custom item media entry.',
-      image: newItemImageUrl || 'https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=500&auto=format&fit=crop&q=60'
+      image: newItemImageUrl || '/stationery/paper-a4-80.svg'
     };
 
     setCatalogItems([newItem, ...catalogItems]);
@@ -519,7 +519,7 @@ export default function StaffDashboard({ user, profile }: StaffDashboardProps) {
                   type="url"
                   value={newItemImageUrl}
                   onChange={(e) => setNewItemImageUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder="/stationery/paper-a4-80.svg"
                   className="w-full p-2.5 border border-slate-300 rounded-lg font-mono"
                   required
                 />

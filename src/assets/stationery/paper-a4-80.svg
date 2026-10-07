@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#f1f5f9"/>
+  <rect x="120" y="40" width="160" height="220" rx="4" fill="#fff" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="200" y="155" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="700" fill="#0f172a">A4 Bond Paper</text>
+  <text x="200" y="178" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" fill="#64748b">80gsm · 500 sheets</text>
+</svg>

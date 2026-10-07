@@ -11,6 +11,7 @@ import BottomNav from './components/BottomNav';
 import SplashScreen from './components/SplashScreen';
 import { seedDatabase } from './seed';
 import CustomerDashboard from './components/CustomerDashboard';
+import { usePayFastReturnHandler } from './hooks/usePayFastReturn';
 import pnxLogo from './assets/pnxlogo.png';
 import { Settings, Monitor, LogOut, ShoppingBag, Lock, Sparkles, X, ShieldCheck, Truck, Printer, FileText, UserCheck } from 'lucide-react';
 
@@ -20,6 +21,7 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth();
 
 export default function App() {
+  usePayFastReturnHandler();
   const [showSplash, setShowSplash] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);

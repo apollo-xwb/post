@@ -32,7 +32,7 @@ export interface Order {
     finish: string;
     sides: 'single' | 'double';
     colorMode: 'color' | 'grayscale';
-    turnaround: 'standard' | 'express' | 'rush';
+    turnaround: 'standard';
     alignment?: {
       scale: number;
       offsetX: number;
@@ -44,7 +44,11 @@ export interface Order {
     customHeight?: number;
     flyerConfig?: string; // Standard or custom flyer type
   };
-  paymentStatus: 'unpaid' | 'paid';
+  paymentStatus: 'unpaid' | 'paid' | 'pending' | 'cancelled' | 'failed';
+  paymentMethod?: string;
+  payfastPaymentId?: string;
+  payfastItnStatus?: string;
+  payfastItnAt?: string;
   staffNote?: string;
   iqInvoiceId?: string; // Integrated IQ Retail invoice ID
   iqSyncStatus?: 'pending' | 'synced' | 'failed';

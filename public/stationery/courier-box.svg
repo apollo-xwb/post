@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#f1f5f9"/>
+  <path d="M100 120 L200 80 L300 120 L300 220 L100 220 Z" fill="#d97706" stroke="#92400e" stroke-width="2"/>
+  <path d="M100 120 L200 160 L300 120" fill="none" stroke="#92400e" stroke-width="2"/>
+  <text x="200" y="250" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="700" fill="#0f172a">Courier Box</text>
+</svg>

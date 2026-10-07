@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <rect width="400" height="300" fill="#f1f5f9"/>
+  <rect x="110" y="60" width="180" height="160" rx="6" fill="#d6d3d1" stroke="#78716c" stroke-width="2"/>
+  <text x="200" y="145" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="700" fill="#44403c">Padded Mailer</text>
+  <text x="200" y="250" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="700" fill="#0f172a">Bubble Mailers A4</text>
+</svg>
